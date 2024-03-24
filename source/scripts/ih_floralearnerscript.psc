@@ -84,11 +84,11 @@ Function DoThing()
 			endif
 			return
 		endif
-		if (this as NirnrootACTIVATORScript)
+		if (this as NirnrootACTIVATORScript || this as USKP_NirnrootACTIVATORScript)
 			IH_LearnedTypes.AddForm(base)
 			IH_Util.Trace("\tLearner: Learned NirnrootACTIVATORScript " + this + "/" + base)
 			return
-		endif
+		endif			
 		
 		IH_Util.Trace("\tLearner: Ignoring activator of unknown type " + this + "/" + base)
 	endif

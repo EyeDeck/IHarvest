@@ -15,6 +15,8 @@ ObjectReference Property Target Auto
 ObjectReference Property SpawnExplosion Auto
 Static Property XMarker Auto
 
+bool Property HasGreenThumb Auto
+
 bool active = false
 bool waitForTranslation = false
 bool waitForPathing = false
@@ -47,6 +49,7 @@ State Init
 	;This needs to run async from the thread that spawned it, so we just send a single update with no delay to kick it off	
 	Event OnUpdate()
 		;~_Util.Trace(self + " Critter's thread started")
+		
 		; place in front of the caster
 		float angle = Caster.GetAngleZ()
 		; float zOffset = 128 / Math.tan(Caster.GetAngleX())
@@ -574,7 +577,7 @@ Function Cleanup()
 	ModActorValue("Fame", 1.0)
 	
 	if (active)
-		IH_PersistentData.ReturnGetterCritter(self)
+		IH_PersistentData.ReturnGetterCritter2(self, HasGreenThumb)
 	else
 		IH_Util.Trace(self + " Skipped return to cache becasue \"active\" is false, which would likely have caused cache confusion.")
 	endif

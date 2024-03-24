@@ -20,11 +20,19 @@ Formlist Property IH_ExaminedTypes Auto
 Formlist Property IH_LearnedTypes Auto
 
 ActorBase Property IH_GetterCritter Auto
+ActorBase Property IH_GetterCritterGT Auto
+{Same as above except these critters have the Green Thumb perk}
+
 IH_GetterCritterScript[] Property StandbyGetterCritters Auto
 {Array of previously spawned critters that are currently idle; probably sparse}
+IH_GetterCritterScript[] Property StandbyGetterCrittersGT Auto
+
 IH_GetterCritterScript[] Property ActiveGetterCritters Auto
 {Array of critters that are enabled and doing something; probably sparse}
+
 int standbyCritterCount = 0
+int standbyCritterCountGT = 0
+
 int activeCritterCount = 0
 
 ObjectReference[] Property PackageTargets Auto
@@ -46,6 +54,8 @@ bool busy = false
 int lastExaminedTypesSize = 0
 Cell lastLearnedCell
 bool learnerRunning = false
+
+int Property version Auto
 
 Event OnInit()
 	Init()
@@ -162,37 +172,48 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 	return FoundFlora
 EndFunction
 
-; int cacheGetSpinLock = 0
 ;/ To avoid making and destroying actors all of the time, we keep a persistent cache of them instead,
 ; and just pull preexisting ones out of the cache as they're requested. /;
-IH_GetterCritterScript Function GetGetterCritter(Actor caster)
+IH_GetterCritterScript Function GetGetterCritter2(Actor caster, bool gt)
 	; IH_Util.Trace("standbyCritterCount: " + standbyCritterCount + " activeCritterCount: " + activeCritterCount)
-	if (standbyCritterCount + activeCritterCount >= 128 || activeCritterCount >= IH_CritterCap.GetValue())
+	IH_GetterCritterScript toReturn
+	
+	if (activeCritterCount >= IH_CritterCap.GetValue())
 		return None
 	endif
-	IH_GetterCritterScript toReturn
-	if (standbyCritterCount == 0)
-		toReturn = caster.PlaceAtMe(IH_GetterCritter, 1, false, true) as IH_GetterCritterScript
-	else
-		
-	;/	while (cacheGetSpinLock > 0)
-			IH_Util.Trace("GetGetterCritter waiting in a spin lock; count: " + cacheGetSpinLock)
-			Utility.Wait(cacheGetSpinLock * 0.033)
-		endwhile
-		cacheGetSpinLock += 1/;
-		
-		toReturn = GetFirstStandbyCritter()
-		if (!toReturn)
-	;		cacheGetSpinLock -= 1
-			return None
+	
+	; v1.0.1: I hate this function now, but I don't want to put like five different checks for gt because I know the Papyrus compiler won't optimize it out
+	; hopefully I'll never have to touch this code again anyway
+	if (gt)
+		if (standbyCritterCountGT == 0)
+			toReturn = caster.PlaceAtMe(IH_GetterCritterGT, 1, false, true) as IH_GetterCritterScript
+		else
+			toReturn = GetFirstStandbyCritterGT()
+			if (!toReturn)
+				return None
+			endif
+			bool result = RemoveStandbyCritterGT(toReturn)
+			if (!result)
+				IH_Util.Trace("Failed to remove this critter from GT standby cache " + toReturn)
+				return None
+			endif
 		endif
-		bool result = RemoveStandbyCritter(toReturn)
-	;	cacheGetSpinLock -= 1
-		if (!result)
-			IH_Util.Trace("Failed to remove this critter from standby cache " + toReturn)
-			return None
+	else
+		if (standbyCritterCount == 0)
+			toReturn = caster.PlaceAtMe(IH_GetterCritter, 1, false, true) as IH_GetterCritterScript
+		else
+			toReturn = GetFirstStandbyCritter()
+			if (!toReturn)
+				return None
+			endif
+			bool result = RemoveStandbyCritter(toReturn)
+			if (!result)
+				IH_Util.Trace("Failed to remove this critter from standby cache " + toReturn)
+				return None
+			endif
 		endif
 	endif
+	
 	if (!InsertActiveCritter(toReturn))
 		IH_Util.Trace("Failed to add this critter to active cache " + toReturn + ", it will be returned to standby instead.")
 		InsertStandbyCritter(toReturn)
@@ -209,7 +230,7 @@ EndFunction
 ; so I really don't know what is going wrong here.
 ; Until I can find the underlying issue, we'll just detect when things go wrong and forcibly fix the caches right then.
 /;
-Function ReturnGetterCritter(IH_GetterCritterScript c)
+Function ReturnGetterCritter2(IH_GetterCritterScript c, bool gt)
 	if (!RemoveActiveCritter(c))
 		;IH_Util.Trace("Failed to remove this critter from active cache " + c)
 		
@@ -217,10 +238,18 @@ Function ReturnGetterCritter(IH_GetterCritterScript c)
 		string[] returnstr = new string[16]
 		returnstr[0] = "That weird thing with the caches happened again (return called twice in a row?); forcibly cleansing caches of all " + c + "..."
 		int strindex = 1
-		while (RemoveStandbyCritter(c))
-			returnstr[strindex] = "...removed instance of " + c + " from standby cache..."
-			strindex += 1
-		endwhile
+		if (gt)
+			while (RemoveStandbyCritterGT(c))
+				returnstr[strindex] = "...removed instance of " + c + " from GT standby cache..."
+				strindex += 1
+			endwhile
+		else
+			while (RemoveStandbyCritter(c))
+				returnstr[strindex] = "...removed instance of " + c + " from standby cache..."
+				strindex += 1
+			endwhile
+		endif
+		
 		while (RemoveActiveCritter(c))
 			returnstr[strindex] = "...removed instance of " + c + " from active cache..."
 			strindex += 1
@@ -228,8 +257,8 @@ Function ReturnGetterCritter(IH_GetterCritterScript c)
 		returnstr[strindex] = "..caches cleaned, critter will be returned to standby..."
 		strindex += 1
 		
-		if (!InsertStandbyCritter(c))
-			; it's safe to make external calls now
+		; it's safe to make external calls now
+		if ((gt && !InsertStandbyCritterGT(c)) || (!gt && !InsertStandbyCritter(c)))
 			returnstr[strindex] = "...Failed to return this critter to standby cache " + c + ", it will be deleted instead."
 			strindex += 1
 			c.Delete()
@@ -244,12 +273,13 @@ Function ReturnGetterCritter(IH_GetterCritterScript c)
 			i += 1
 		endwhile
 		Debug.TraceStack(self + " printing ReturnGetterCritter stack trace")
-	elseif (!InsertStandbyCritter(c))
-		IH_Util.Trace("Failed to return this critter to standby cache " + c + ", it will be deleted instead.")
+	elseif ((gt && !InsertStandbyCritterGT(c)) || (!gt && !InsertStandbyCritter(c)))
+		IH_Util.Trace("Failed to return this critter to GT standby cache " + c + ", it will be deleted instead.")
 		c.Delete()
 	endif
 EndFunction
 
+; --------- Normal critter functions ---------
 IH_GetterCritterScript Function GetFirstStandbyCritter()
 	int i = 0
 	while (i < StandbyGetterCritters.Length)
@@ -262,35 +292,92 @@ IH_GetterCritterScript Function GetFirstStandbyCritter()
 EndFunction
 
 bool Function InsertStandbyCritter(IH_GetterCritterScript c)
-	if (ReplaceFirstInstance(StandbyGetterCritters, None, c))
+	int index = StandbyGetterCritters.Find(None, 0)
+	if (index < 0)
+		return false
+	else
+		StandbyGetterCritters[index] = c
 		standbyCritterCount += 1
 		return true
 	endif
-	return false
 EndFunction
 
 bool Function RemoveStandbyCritter(IH_GetterCritterScript c)
-	if (ReplaceFirstInstance(StandbyGetterCritters, c, None))
+	int index = StandbyGetterCritters.Find(c, 0)
+	if (index < 0)
+		return false
+	else
+		StandbyGetterCritters[index] = None
 		standbyCritterCount -= 1
 		return true
 	endif
-	return false
+EndFunction
+; --------- End normal critter functions ---------
+
+; --------- Green Thumb critter functions ---------
+IH_GetterCritterScript Function GetFirstStandbyCritterGT()
+	int i = 0
+	while (i < StandbyGetterCrittersGT.Length)
+		if (StandbyGetterCrittersGT[i] != None)
+			return StandbyGetterCrittersGT[i]
+		endif
+		i += 1
+	endwhile
+	return None
 EndFunction
 
+bool Function InsertStandbyCritterGT(IH_GetterCritterScript c)
+	int index = StandbyGetterCrittersGT.Find(None, 0)
+	if (index < 0)
+		return false
+	else
+		StandbyGetterCrittersGT[index] = c
+		standbyCritterCountGT += 1
+		return true
+	endif
+EndFunction
+
+bool Function RemoveStandbyCritterGT(IH_GetterCritterScript c)
+	int index = StandbyGetterCrittersGT.Find(c, 0)
+	if (index < 0)
+		return false
+	else
+		StandbyGetterCrittersGT[index] = None
+		standbyCritterCountGT -= 1
+		return true
+	endif
+EndFunction
+; --------- End Green Thumb critter functions ---------
+
 bool Function InsertActiveCritter(IH_GetterCritterScript c)
-	if (ReplaceFirstInstance(ActiveGetterCritters, None, c))
+	int index = ActiveGetterCritters.Find(None, 0)
+	if (index < 0)
+		return false
+	else
+		ActiveGetterCritters[index] = c
 		activeCritterCount += 1
 		return true
 	endif
-	return false
 EndFunction
 
 bool Function RemoveActiveCritter(IH_GetterCritterScript c)
-	if (ReplaceFirstInstance(ActiveGetterCritters, c, None))
+	int index = ActiveGetterCritters.Find(c, 0)
+	if (index < 0)
+		return false
+	else
+		ActiveGetterCritters[index] = None
 		activeCritterCount -= 1
 		return true
 	endif
-	return false
+EndFunction
+
+; old functions that are no longer used, but we need to keep them with the original signature for save compatibility
+IH_GetterCritterScript Function GetGetterCritter(Actor caster)
+	return GetGetterCritter2(caster, false)
+EndFunction
+
+Function ReturnGetterCritter(IH_GetterCritterScript c)
+	ReturnGetterCritter2(c, false)
 EndFunction
 
 ;/ So it turns out that ObjectReference.PathToReference() is bad—really bad, save-corruptingly bad in fact.
@@ -330,17 +417,12 @@ EndFunction
 ;	You should also make sure to clear the ID/ObjRef/RefAlias variables filled earlier, but that's not critical.
 ; /;
 int Function CheckoutPathingAlias()
-	int i = 0
-	int l = PathingMarkerCheckout.Length
-	while (i < l)
-		if (PathingMarkerCheckout[i] == false)
-			PathingMarkerCheckout[i] = true
-;			Debug.TraceStack("Reserving ID: " + i)
-			return i
-		endif
-		i += 1
-	endwhile
-	return -1
+	int i = PathingMarkerCheckout.Find(false)
+	if (i >= 0)
+;		Debug.TraceStack("Reserving ID: " + i)
+		PathingMarkerCheckout[i] = true
+	endif
+	return i
 EndFunction
 
 ObjectReference Function GetPathingMarker(int id)
@@ -361,17 +443,10 @@ Function ReturnPathingAlias(int id);, ReferenceAlias a = None)
 	PathingMarkerCheckout[id] = false
 EndFunction
 
-; int RFIspinlock = 0
-; Sadly this can't just be a generic function taking Form[] in Skyrim, though it could be in FO4
+; deprecated because I found out that the array Find "function" isn't even a function, so I can optimize out this function entirely,
+; but left in place in case in case any saved running threads need to use it
 bool Function ReplaceFirstInstance(IH_GetterCritterScript[] arr, IH_GetterCritterScript toFind, IH_GetterCritterScript toReplace) ;, int retries = 3)
-	;/ I was pretty sure this is supposed to be guaranteed by the language spec not to be needed here; turns out I was right,
-	; as I've never seen that line in the debug log, so I've commented it out
-	while (RFIspinlock > 0)
-		IH_Util.Trace("ReplaceFirstInstance waiting in a spin lock (why?!); count: " + RFIspinlock)
-		Utility.Wait(RFIspinlock * 0.033)
-	endwhile
-	RFIspinlock += 1 ; /;
-	
+{Deprecated}
 	int i = 0
 	int l = arr.Length
 	IH_GetterCritterScript c
@@ -379,27 +454,12 @@ bool Function ReplaceFirstInstance(IH_GetterCritterScript[] arr, IH_GetterCritte
 		c = arr[i]
 		if (c == toFind)
 			arr[i] = toReplace
-			;RFIspinlock -= 1
 			return true
 		endif
 		i += 1
 	endwhile
 	
-	;IH_Util.Trace("ReplaceFirstInstance(<arr> (see below), " + toFind + ", " + toReplace + ") failed.")
-	;PrintCritterArray(arr)
 	return false
-	
-	;/
-	string s = IH_Util.Trace("ReplaceFirstInstance(<arr> (see below), " + toFind + ", " + toReplace + ", " + retries + ") failed.")
-	PrintCritterArray(arr)
-	;RFIspinlock -= 1
-	if (retries > 0)
-		IH_Util.Trace(s + " Waiting and retrying.")
-		return ReplaceFirstInstance(arr, toFind, toReplace, retries - 1)
-	else
-		IH_Util.Trace(s + " Retry count exhausted, giving up.")
-		return false
-	endif ; /;
 EndFunction
 
 Function ClearFloraCaches()
@@ -474,6 +534,22 @@ Function RecallAllCritters()
 			standbyCritterCount += 1
 		endif
 		
+		a = StandbyGetterCrittersGT[i]
+		if (a != None)
+			j = i - 1
+			while (j >= 0)
+				b =  StandbyGetterCrittersGT[j]
+				if (a == b)
+					IH_Util.Trace("\tDeduped StandbyGetterCrittersGT index " + i + "/" + j)
+					StandbyGetterCrittersGT[i] = None
+					standbyCritterCountGT -= 1
+				endif
+				j -= 1
+			endwhile
+			
+			standbyCritterCount += 1
+		endif
+		
 		i -= 1
 	endwhile
 	
@@ -488,14 +564,57 @@ Function RecallAllCritters()
 	endwhile
 	
 	pathAliasCount = 64
-	; /;
 	PathingMarkerCheckout = new bool[64]
+	; /;
 	
 	IH_Util.Trace("...Recall routine finished. Active#: " + activeCritterCount + ", Standby#: " + standbyCritterCount + ", Redumping arrays:\n\tActiveGetterCritters:")
 	PrintCritterArray(ActiveGetterCritters)
 	IH_Util.Trace("\n\tStandbyGetterCritters: ")
 	PrintCritterArray(StandbyGetterCritters)
+	
+	;/ just testing some performance related stuff, because according to SMKViper:
+	;	There is a special case for the array find and rfind functions which are actually opcodes, and so do not have any of the overhead associated with function calls.
+	; I have always assumed these to be latent function calls, because the wiki does not mention otherwise like it does for other non-delayed function calls.
+	int[] test = new int[64]
+	float time = Utility.GetCurrentRealTime()
+	i = 0
+	while (i < test.length)
+		test[i] = i
+		i += 1
+	endwhile
+	i = 0
+	int bleh
+	IH_Util.Trace("Starting Find test")
+	while (i < 10000)
+		bleh = test.Find(32, 0)
+		i += 1
+	endwhile
+	IH_Util.Trace("Array.Find() test finished, total time elapsed: " + (Utility.GetCurrentRealTime() - time) + " \\ retrying in Papyrus: ")
+	time = Utility.GetCurrentRealTime()
+	i = 0
+	while (i < 10000)
+		bleh = FindTest(test, 32, 0)
+		i += 1
+	endwhile
+	IH_Util.Trace("FindTest() test finished, total time elapsed: " + (Utility.GetCurrentRealTime() - time))
+	
+	; results:
+	; [08/24/2019 - 07:55:27PM] Starting Find test
+	; [08/24/2019 - 07:55:27PM] Array.Find() test finished, total time elapsed: 0.059006 \ retrying in Papyrus: 
+	; [08/24/2019 - 07:55:48PM] FindTest() test finished, total time elapsed: 2.449997
+	; looks like I get to rewrite some code...
+	; /;
 EndFunction
+
+;/ int Function FindTest(int[] in, int target, int i = 0)
+	while (i < in.length)
+		if (in[i] == target)
+			return i
+		endif
+		i += 1
+	endwhile
+	return -1
+EndFunction /;
 
 Function PrintCritterArray(IH_GetterCritterScript[] arr)
 	int l = arr.Length
@@ -547,3 +666,19 @@ State Learning
 		lastLearnedCell = currentCell
 	EndEvent
 EndState
+
+Function CheckUpdates()
+	int versionCurrent = 010001 ; 01.00.01
+	IH_Util.Trace("Checking for updates; last version: " + version + ", current version: " + versionCurrent)
+	if (version < versionCurrent)
+		if (version == 0)
+			IH_Util.Trace("\tv1.0.1: Initializing StandbyGetterCrittersGT array")
+			StandbyGetterCrittersGT = new IH_GetterCritterScript[128]
+		endif
+		IH_Util.Trace("Finished updates.")
+	else
+		IH_Util.Trace("No update this load.")
+	endif
+	version = versionCurrent
+EndFunction
+

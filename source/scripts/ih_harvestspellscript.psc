@@ -5,6 +5,7 @@ Actor Property PlayerRef Auto
 Keyword Property IH_SMKeyword Auto
 ; IH_FloraFinderScript Property IH_FloraFinder Auto
 IH_PersistentDataScript Property IH_PersistentData Auto
+Perk Property GreenThumb Auto
 
 GlobalVariable Property IH_CurrentSearchRadius Auto
 
@@ -62,14 +63,20 @@ int slowMode = 0
 
 bool dualCasting = false
 
+bool hasGreenThumb = false
+
 Event OnEffectStart(Actor akTarget, Actor akCaster)
 	DEBUG.OpenUserLog("IHarvest")
-	IH_Util.Trace("Cast effect starting")
+;	IH_Util.Trace("Cast effect starting")
 	cachedFloraCount = 0
 	caster = akCaster
 	
 	if (caster.GetAnimationVariableBool("IsCastingDual"))
 		dualCasting = true
+	endif
+	
+	if (caster.HasPerk(GreenThumb))
+		hasGreenThumb = true
 	endif
 	
 	int alt = caster.GetActorValue("Alteration") as int
@@ -126,11 +133,11 @@ Function StopCast()
 EndFunction
 
 Function DoCast()
-	IH_Util.Trace("Casting; current radius: " + radius + "/" + maxRadius + "; current delay:" + delay + "/" + minDelay + ", accel: " + accel)
+;	IH_Util.Trace("Casting; current radius: " + radius + "/" + maxRadius + "; current delay:" + delay + "/" + minDelay + ", accel: " + accel)
 	ObjectReference thing = GetHarvestable()
 	
 	if (thing == None)
-		IH_Util.Trace("\tNo harvestables found.")
+;		IH_Util.Trace("\tNo harvestables found.")
 		slowMode += 1 
 		return
 	else
@@ -138,14 +145,14 @@ Function DoCast()
 	endif
 	
 ;	IH_Util.Trace("Getting critter")
-	IH_GetterCritterScript getterCritter = IH_PersistentData.GetGetterCritter(caster)
+	IH_GetterCritterScript getterCritter = IH_PersistentData.GetGetterCritter2(caster, hasGreenThumb)
 	if (getterCritter == None)
 		IH_Util.Trace("\tFailed to get a critter from IH_PersistentData (most likely at concurrency cap); aborting cast.")
 		slowMode += 3
 		return
 	endif
 	
-	IH_Util.Trace("\tFound thing " + thing + ", dispatching critter " + getterCritter)
+	IH_Util.Trace("Found thing " + thing + ", dispatching critter " + getterCritter)
 	IH_PersistentData.AddIgnoredObject(thing)
 	
 ;	IH_Util.Trace("Got critter " + getterCritter)
@@ -153,7 +160,7 @@ Function DoCast()
 	; set up the critter's state and start its thread asynchronously (it's autonomous after this point)
 	if (!getterCritter.SetTargets(caster, thing))
 		; don't let the critter leak in case it's in a state where it ignores SetTargets
-		IH_PersistentData.ReturnGetterCritter(getterCritter)
+		IH_PersistentData.ReturnGetterCritter2(getterCritter, hasGreenThumb)
 	endif
 ;	IH_Util.Trace("Set critter's targets: " + caster + ", " + thing)
 	
