@@ -16,6 +16,8 @@ Message Property IH_StatsDisplay			Auto
 Message Property IH_OperationFinishedCache	Auto
 Message Property IH_OperationFinishedRecall	Auto
 
+FormList Property IH_SpawnableBase			Auto
+
 GlobalVariable Property IH_CritterCap Auto
 GlobalVariable Property IH_SetPlayerNotPushable Auto
 
@@ -78,7 +80,7 @@ bool busy = false
 int Property version Auto
 
 int Function GetVersion()
-	return 010103 ; 01.01.02
+	return 010104 ; 01.01.02
 EndFunction
 
 Event OnInit()
@@ -231,7 +233,7 @@ IH_GetterCritterScript Function GetGetterCritter2(Actor caster, bool gt)
 	; I know the Papyrus compiler won't optimize it out. Hopefully I'll never have to touch this code again, anyway.
 	if (gt)
 		if (standbyCritterCountGT == 0)
-			toReturn = caster.PlaceAtMe(IH_GetterCritterGT, 1, false, true) as IH_GetterCritterScript
+			toReturn = caster.PlaceAtMe(IH_GetterCritterGT, 1, true, true) as IH_GetterCritterScript
 			toReturn.SetPlayerTeammate(true)
 		else
 			toReturn = GetFirstStandbyCritterGT()
@@ -246,7 +248,7 @@ IH_GetterCritterScript Function GetGetterCritter2(Actor caster, bool gt)
 		endif
 	else
 		if (standbyCritterCount == 0)
-			toReturn = caster.PlaceAtMe(IH_GetterCritter, 1, false, true) as IH_GetterCritterScript
+			toReturn = caster.PlaceAtMe(IH_GetterCritter, 1, true, true) as IH_GetterCritterScript
 			toReturn.SetPlayerTeammate(true)
 		else
 			toReturn = GetFirstStandbyCritter()
@@ -694,6 +696,74 @@ Function TallyCritterStats()
 	float totalCritters = critters + crittersGT
 	float totalFame = fameCritters + fameCrittersGT
 	IH_StatsDisplay.Show(totalCritters, critters, crittersGT, totalFame, fameCritters, fameCrittersGT, totalFame / totalCritters, top) 
+EndFunction
+
+Function DeleteGetterCritters()
+	RecallAllCritters()
+	
+	IH_Util.Trace("Getter critter Final Solution has been put into effect--sending critters to concentration camps...")
+	Form[] allCritters = Utility.CreateFormArray(512, None)
+	int i = 0
+	int last = 0
+	Form tmp
+	while (i < 128)
+		tmp = StandbyGetterCritters[i]
+		if (tmp)
+			StandbyGetterCritters[i] = None
+			allCritters[last] = tmp
+			last += 1
+		endif
+		
+		tmp = StandbyGetterCrittersGT[i]
+		if (tmp)
+			StandbyGetterCrittersGT[i] = None
+			allCritters[last] = tmp
+			last += 1
+		endif
+		
+		tmp = ActiveGetterCritters[i]
+		if (tmp)
+			ActiveGetterCritters[i] = None
+			allCritters[last] = tmp
+			last += 1
+		endif
+		
+		i += 1
+	endwhile
+	IH_Util.Trace("\t...roundup complete--exterminating...")
+	i = 0
+	IH_GetterCritterScript c
+	while (i < last)
+		c = (allCritters[i] as IH_GetterCritterScript)
+		if (c != None)
+			c.Disable()
+			c.Delete()
+		endif
+		i += 1
+	endwhile
+	
+	StandbyGetterCritters = new IH_GetterCritterScript[128]
+	standbyCritterCount = 0
+	
+	StandbyGetterCrittersGT = new IH_GetterCritterScript[128]
+	standbyCritterCountGT = 0
+	
+	ActiveGetterCritters = new IH_GetterCritterScript[128]
+	activeCritterCount = 0
+	
+	bool keepDeleting = true
+	while (keepDeleting)
+		ObjectReference thing = Game.FindRandomReferenceOfAnyTypeInListFromRef(IH_SpawnableBase, PlayerRef, 2000000.0)
+		if (thing == None)
+			keepDeleting = false
+		else
+			IH_Util.Trace("...found unreferenced spawned thing " + thing + " to delete...")
+			thing.Disable()
+			thing.Delete()
+		endif
+	endwhile
+	
+	IH_Util.Trace("...critters have been exterminated.")
 EndFunction
 
 Function CheckUpdates()

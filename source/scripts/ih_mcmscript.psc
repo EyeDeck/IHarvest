@@ -15,6 +15,7 @@ IH_PersistentDataScript Property IH_PersistentData Auto
 
 int OIDcrittercap
 int OIDrecall
+int OIDdelete
 int OIDexp
 int OIDclear
 int OIDnspam
@@ -44,6 +45,7 @@ Event OnPageReset(string a_page)
 		AddHeaderOption("$Maintenance")
 		OIDrecall = AddTextOption("$Recall Active Critters", "[ ]")
 		OIDclear = AddTextOption("$Clear Flora Cache", "[ ]")
+		OIDdelete = AddTextOption("$Delete Getter Critters", "[ ]")
 		
 		SetCursorPosition(1) ; top right
 		
@@ -63,6 +65,9 @@ Event OnOptionSelect(int a_option)
 	elseif (a_option == OIDrecall)
 		SetTextOptionValue(a_option, "$[Please close menu]", false)
 		IH_PersistentData.RecallAllCritters()
+	elseif (a_option == OIDdelete)
+		SetTextOptionValue(a_option, "$[Please close menu]", false)
+		IH_PersistentData.DeleteGetterCritters()
 	elseif (a_option == OIDstats)
 		SetTextOptionValue(a_option, "$[Please close menu]", false)
 		IH_PersistentData.TallyCritterStats()
@@ -166,6 +171,8 @@ Event OnOptionHighlight(int a_option)
 		SetInfoText("$OIDcrittercap_INFO")
 	elseif (a_option == OIDrecall)
 		SetInfoText("$OIDrecall_INFO")
+	elseif (a_option == OIDdelete)
+		SetInfoText("$OIDdelete_INFO")
 	elseif (a_option == OIDexp)
 		SetInfoText("$OIDexp_INFO")
 	elseif (a_option == OIDclear)

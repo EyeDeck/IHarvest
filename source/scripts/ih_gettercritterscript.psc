@@ -397,7 +397,7 @@ State Done
 	
 	Event OnUpdate()
 		float thistime = Utility.GetCurrentRealTime()
-		if (thistime > stucktime + 1.5)
+		if (thistime > stucktime + 1.5 || thistime < stucktime)
 			if (SpawnExplosion)
 				SpawnExplosion.Disable()
 			endif
@@ -420,7 +420,7 @@ EndFunction
 ; separated out of OnInit() so I could update a dev save
 Function CheckPersistentSpawns()
 	if (SpawnExplosion == None)
-		SpawnExplosion = PlaceAtMe(IH_FXGetterCritterSpawnPoof, 1, false, false)
+		SpawnExplosion = PlaceAtMe(IH_FXGetterCritterSpawnPoof, 1, true, false)
 		SpawnExplosion.SetScale(0.225)
 	endif
 	
