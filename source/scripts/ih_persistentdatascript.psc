@@ -11,6 +11,7 @@ Message Property IH_SKSENotRunning			Auto
 Message Property IH_SKSEMismatch			Auto
 Message Property IH_Update					Auto
 Message Property IH_UpdateUnsupported		Auto
+Message Property IH_StoryManagerHighLoad	Auto
 
 Message Property IH_StatsDisplay			Auto
 Message Property IH_OperationFinishedCache	Auto
@@ -20,6 +21,7 @@ FormList Property IH_SpawnableBase			Auto
 
 GlobalVariable Property IH_CritterCap Auto
 GlobalVariable Property IH_SetPlayerNotPushable Auto
+GlobalVariable Property IH_UseStartFunc Auto
 
 GlobalVariable Property IH_LearnHearthfire Auto
 
@@ -34,7 +36,8 @@ int Property cacheSize = -1 Auto
 int Property pathAliasCount = 64 Auto
 
 Keyword Property IH_SMKeyword Auto
-Quest Property IH_FloraFinder Auto
+IH_FloraFinderScript Property IH_FloraFinder Auto
+IH_FloraFinderScript Property IH_FloraFinderPlayer Auto
 Quest Property IH_FloraLearner Auto
 
 Formlist Property IH_ExaminedTypes Auto
@@ -69,6 +72,7 @@ int trailingIndex = 0
 
 int workerCount = 8 ; must be hard-coded—if changed, also update the array init size in OnQuestInit()
 ObjectReference[] FoundFlora
+int lastCallbackTime = 0
 int finishedWorkers = 0
 int fruitfulWorkers = 0
 int cachedFlora = 0
@@ -80,7 +84,7 @@ bool busy = false
 int Property version Auto
 
 int Function GetVersion()
-	return 010105 ; 01.01.05
+	return 010106 ; 01.01.06
 EndFunction
 
 Event OnInit()
@@ -169,11 +173,15 @@ Function FloraFinderUpdate(ObjectReference thing, int err)
 	finishedWorkers += 1
 EndFunction
 
+Function FloraFinderCallback(int time)
+	lastCallbackTime = time
+EndFunction
+
 ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 {Latent function that returns an array of nearby harvestables. These can be:
 	TreeObject, Flora, Ingredient, Activator (Critter or FXfakeCritterScript)}
 	if (busy)
-		;~_Util.Trace("GetNearbyHarvestables is busy.")
+		IH_Util.Trace("GetNearbyHarvestables is busy.")
 		return new ObjectReference[1]
 	endif
 	busy = true
@@ -181,6 +189,67 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 	finishedWorkers = 0
 	fruitfulWorkers = 0
 	cachedFlora = 0
+	int i
+	
+	lastCallbackTime = -1
+	int sendTime = (Utility.GetCurrentRealTime() as int)
+	
+	IH_FloraFinderScript finderQuest
+	if (caster == PlayerRef && IH_UseStartFunc.GetValue())
+		; IH_Util.Trace("Starting player-specific quest the old-fashioned way...waiting for worker threads to finish.")
+		finderQuest = IH_FloraFinderPlayer
+		if (finderQuest.Start() == false && finderQuest.IsRunning())
+			finderQuest.Stop()
+			if (finderQuest.Start())
+				IH_Util.Trace("Failed to start " + finderQuest + ", was already running, and failed a restart!", 2)
+			else
+				IH_Util.Trace(finderQuest + " was already running, but successfully forcibly restarted!", 1)
+			endif
+		endif
+	else
+		IH_Util.Trace("Sent story event...waiting for worker threads to finish.")
+		finderQuest = IH_FloraFinder
+		IH_SMKeyword.SendStoryEvent(akRef1 = caster, aiValue1 = sendTime, aiValue2 = 1)
+		
+		i = 0
+		while (lastCallbackTime < 0 && i < 60) ; 3 second timeout
+			Utility.WaitMenuMode(0.05)
+			i += 1
+		endwhile
+		
+		int minTime = (Utility.GetCurrentRealTime() as int) - 5
+		int maxTime = minTime + 10
+		; IH_Util.Trace("Loop ended: " + i + " " + lastCallbackTime + " " + newTime)
+		if (i == 60 || lastCallbackTime > maxTime || lastCallbackTime < minTime)
+			; if i == 60 (timeout)  OR  lastCallbackTime > maxTime (also timeout)  OR  lastCallbackTime < minTime (time desync, save was just loaded)
+			IH_Util.Trace("IH_FloraFinder failed to start after a few seconds--Story Manager backed up?", 1)
+			SMFailureCount += 1
+			if (SMFailureCount > 1)
+				if (finderQuest.IsRunning())
+					IH_Util.Trace("Detected that IH_FloraFinder is probably stuck running - forcibly stopping quest.", 2)
+					finderQuest.Stop()
+				else
+					IH_Util.Trace("Detected that the Story Manager is under high load - showing warning to player.", 1)
+					IH_StoryManagerHighLoad.Show()
+					
+					i = 0
+					while (lastCallbackTime < 0 && i < 120)
+						Utility.WaitMenuMode(1.0)
+						i += 1
+					endwhile
+					if (i < 300)
+						IH_Util.Trace("Story manager unstuck, after " + i + " seconds!")
+					else
+						IH_Util.Trace("Timed out after waiting " + i + " seconds for the story manager to unstick.", 2)
+					endif
+				endif
+			endif
+			
+			busy = false
+			return new ObjectReference[1]
+		endif
+		SMFailureCount = 0
+	endif
 	
 	;/ Right so, right here I'm using a little-known feature of the Story manager—in fact, now that I think about it,
 	; I can't remember ever having found another mod in the wild that uses this feature—anyway, our IH_FloraFinder
@@ -191,30 +260,29 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 	; equally usable by the PC _or_ NPCs, instead of making it a hard-coded player-only sort of deal. Specifically,
 	; we're passing the caster into SendStoryEventAndWait(), which starts IH_FloraFinder up with the Caster alias
 	; pre-filled, who is then used in the GetDistance conditional when the Story Manager fills our FinderRefs. /;
-	if (!IH_SMKeyword.SendStoryEventAndWait(akRef1 = caster))
-		;~_Util.Trace("IH_SMKeyword.SendStoryEventAndWait(akRef1 = caster) failed. FoundFlora:" + FoundFlora)
-		SMFailureCount += 1
-		
-		if (SMFailureCount > 4)
-			IH_Util.Trace("Detected that IH_FloraFinder is probably stuck running - forcibly stopping quest.", 2)
-			IH_FloraFinder.Stop()
-		endif
-		
-		busy = false
-		return new ObjectReference[1]
-	endif
-	SMFailureCount = 0
-	
-;	IH_Util.Trace("Sent story event...waiting for worker threads to finish.")
+;	if (!IH_SMKeyword.SendStoryEventAndWait(akRef1 = caster))
+;		; IH_Util.Trace("IH_SMKeyword.SendStoryEventAndWait(akRef1 = caster) failed. FoundFlora:" + FoundFlora)
+;		SMFailureCount += 1
+;		
+;		if (SMFailureCount > 4)
+;			IH_Util.Trace("Detected that IH_FloraFinder is probably stuck running - forcibly stopping quest.", 2)
+;			IH_FloraFinder.Stop()
+;		endif
+;		
+;		busy = false
+;		return new ObjectReference[1]
+;	endif
+;	SMFailureCount = 0
+
 	; now wait for our worker threads to fill in the data we want
-	int i = 0
+	i = 0
 	while (finishedWorkers < 8 && i < 20)
 	;	IH_Util.Trace("finishedWorkers:" + finishedWorkers)
 		Utility.WaitMenuMode(0.033) ; ~2 frames at 60fps
 		i += 1 ; failsafe
 	endwhile
 	;~_Util.Trace("Workers finished. FoundFlora:" + FoundFlora)
-	IH_FloraFinder.Stop()
+	finderQuest.Stop()
 	busy = false
 	return FoundFlora
 EndFunction
@@ -508,6 +576,7 @@ Function ClearFloraCaches()
 	IH_Util.Trace("Clearing all known flora...")
 	float time = Utility.GetCurrentRealTime()
 	
+	IH_FloraLearnerController.LastCell = None
 	IH_FloraLearnerController.VerifyState()
 	
 	IH_LearnedTypes.Revert()

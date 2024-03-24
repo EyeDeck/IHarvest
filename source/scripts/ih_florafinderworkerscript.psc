@@ -9,6 +9,8 @@ ActorBase Property Player Auto
 Event OnInit()
 	ObjectReference this = GetReference()
 	
+	; IH_Util.Trace("ref: " + (self.GetOwningQuest().GetAlias(0) as ReferenceAlias).GetReference())
+	
 	if (this == None)
 	;	IH_Util.Trace("\t" + self + " GetReference() is null.")
 		UpdateOwner(None, 1)
@@ -16,7 +18,7 @@ Event OnInit()
 	endif
 	Form base = this.GetBaseObject()
 	
-	; IH_Util.Trace("\t" + self + " filled with ref " + this + ", base " + base)
+	IH_Util.Trace("\t" + self + " filled with ref " + this + ", base " + base)
 	
 	; test if activation is blocked (this is probably almost never an issue,
 	; but hey this code is all multithreaded anyway so there's no harm in checking)
@@ -115,6 +117,7 @@ Event OnInit()
 EndEvent
 
 Function UpdateOwner(ObjectReference thing, int err)
+	; IH_Util.Trace("Updating owner " + IH_PersistentData + " with " + thing + ", " + err)
 	IH_PersistentData.FloraFinderUpdate(thing, err)
 	self.Clear()
 EndFunction

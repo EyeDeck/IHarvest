@@ -3,11 +3,26 @@ Scriptname IH_FloraLearnerControllerScript extends Quest
 Actor Property PlayerRef Auto
 
 Quest Property IH_FloraLearner Auto
+Quest Property IH_FloraLearnerSM Auto
 
 ; GlobalVariable Property IH_LearnerRunning Auto ; v1.0.9: deprecated, hasn't been useful since v1.0.4
+GlobalVariable Property IH_UseStartFunc Auto
+Message Property IH_StoryManagerHighLoad Auto
+Keyword Property IH_SMKeyword Auto
 
 Formlist Property IH_ExaminedTypes Auto
 Formlist Property IH_LearnedTypes Auto
+
+Cell Property LastCell
+	; full property because I needed to be able to externally clear this and mantain backwards compatibility
+	Function Set(Cell value)
+		lastLearnedCell = value
+	EndFunction
+
+	Cell Function Get()
+		return lastLearnedCell
+	EndFunction
+EndProperty
 
 int lastExaminedTypesSize = 0
 int unfinishedThreads = 0
@@ -76,22 +91,43 @@ Function VerifyState()
 	else
 		IH_Util.Trace("FloraLearnerController state " + GetState() + " seems fine.")
 	endif
-	IH_FloraLearner.Stop()
+	if (IH_UseStartFunc.GetValue() as bool)
+		IH_FloraLearner.Stop()
+	else
+		IH_FloraLearnerSM.Stop()
+	endif
 EndFunction
 
 Function RunLearnerThreads()
+	int i
 	unfinishedThreads = 4
-
-	if (!IH_FloraLearner.Start())
-		; try stopping and restarting I guess
-		Utility.Wait(0.1)
-		IH_FloraLearner.Stop()
-		Utility.Wait(0.1)
-		RunLearnerThreads()
-		return
+	bool startMode = IH_UseStartFunc.GetValue() as bool
+	
+	if (startMode)
+		if (!IH_FloraLearner.Start()) 
+			; try stopping and restarting I guess
+			IH_FloraLearner.Stop()
+			Utility.Wait(0.1)
+			return
+		endif
+	else
+		IH_SMKeyword.SendStoryEvent(aiValue2 = 2)
+		
+		i = 0
+		while (i < 50 && !IH_FloraLearnerSM.IsRunning()) ; 5 second timeout
+			Utility.WaitMenuMode(0.1)
+			i += 1
+		endwhile
+		
+		if (i == 50)
+			IH_StoryManagerHighLoad.Show()
+			IH_FloraLearnerSM.Stop()
+			Utility.Wait(0.1)
+			return
+		endif
 	endif
 	
-	int i = 0
+	i = 0
 	while (unfinishedThreads > 0 && i < 25)
 		Utility.wait(0.1)
 		i += 1
@@ -101,5 +137,9 @@ Function RunLearnerThreads()
 		VerifyState()
 	endif
 	
-	IH_FloraLearner.Stop()
+	if (startMode)
+		IH_FloraLearner.Stop()
+	else
+		IH_FloraLearnerSM.Stop()
+	endif
 EndFunction

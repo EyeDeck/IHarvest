@@ -10,6 +10,7 @@ GlobalVariable Property IH_SpawnDistanceMult Auto
 GlobalVariable Property IH_OffsetReturnPoint Auto
 GlobalVariable Property IH_StaffDrainPerSpawn Auto
 GlobalVariable Property IH_MagickaDrainPerSpawn Auto
+GlobalVariable Property IH_UseStartFunc Auto
 
 IH_PersistentDataScript Property IH_PersistentData Auto
 
@@ -27,6 +28,7 @@ int OIDreturnOffset
 int OIDstats
 int OIDstaffdrain
 int OIDmagickadrain
+int OIDquestmode
 
 Event OnPageReset(string a_page)
 	if (a_page == "")
@@ -46,6 +48,11 @@ Event OnPageReset(string a_page)
 		OIDrecall = AddTextOption("$Recall Active Critters", "[ ]")
 		OIDclear = AddTextOption("$Clear Flora Cache", "[ ]")
 		OIDdelete = AddTextOption("$Delete Getter Critters", "[ ]")
+		if (IH_UseStartFunc.GetValue() <= 0.0)
+			OIDquestmode = AddMenuOption("$Quest Start Mode", "$Story Manager")
+		else
+			OIDquestmode = AddMenuOption("$Quest Start Mode", "$Start")
+		endif
 		
 		SetCursorPosition(1) ; top right
 		
@@ -138,6 +145,29 @@ Event OnOptionSliderAccept(int a_option, float a_value)
 	endif
 EndEvent
 
+Event OnOptionMenuOpen(int a_option)
+	string[] options
+	if (a_option == OIDquestmode)
+		options = new string[2]
+		options[0] = "$Story Manager"
+		options[1] = "$Start"
+		SetMenuDialogDefaultIndex(0)
+		SetMenuDialogStartIndex(IH_UseStartFunc.GetValue() as int)
+		SetMenuDialogOptions(options)
+	endif
+EndEvent
+
+Event OnOptionMenuAccept(int a_option, int a_index)
+	if (a_option == OIDquestmode)
+		IH_UseStartFunc.SetValue(a_index as float)
+		if (a_index <= 0)
+			SetMenuOptionValue(OIDquestmode, "$Story Manager")
+		else
+			SetMenuOptionValue(OIDquestmode, "$Start")
+		endif
+	endif
+EndEvent
+
 Event OnOptionDefault(int a_option)
 	if (a_option == OIDexp)
 		OnOptionSliderAccept(a_option, 10.0)
@@ -163,6 +193,8 @@ Event OnOptionDefault(int a_option)
 		OnOptionSliderAccept(a_option, 12.0)
 	elseif (a_option == OIDmagickadrain)
 		OnOptionSliderAccept(a_option, 5.0)
+	elseif (a_option == OIDquestmode)
+		OnOptionMenuAccept(a_option, 0)
 	endif
 EndEvent
 
@@ -195,6 +227,8 @@ Event OnOptionHighlight(int a_option)
 		SetInfoText("$OIDstaffdrain_INFO")
 	elseif (a_option == OIDmagickadrain)
 		SetInfoText("$OIDmagickadrain_INFO")
+	elseif (a_option == OIDquestmode)
+		SetInfoText("$OIDquestmode_INFO")
 	endif
 EndEvent
 

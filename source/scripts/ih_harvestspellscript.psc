@@ -271,6 +271,7 @@ ObjectReference Function GetHarvestable()
 	if (cachedFloraCount == 0)
 		cachedFloraCount = CacheHarvestables()
 		if (cachedFloraCount < 8 && radius < maxRadius)
+			; IH_Util.Trace("radius=" + radius + ", maxRadius=" + maxRadius)
 			; if the cache is not full, increase the radius for the next check to try to avoid expensive total misses
 			radius = (radius * 1.5) as int
 			if (radius > maxRadius)
@@ -284,10 +285,10 @@ ObjectReference Function GetHarvestable()
 		endif
 	endif
 	
-	;~_Util.Trace("cachedFloraCount:" + cachedFloraCount + " cachedFlora:" + cachedFlora)
+	; IH_Util.Trace("cachedFloraCount:" + cachedFloraCount + " cachedFlora:" + cachedFlora)
 	
 	if (cachedFloraCount == 0)
-		;~_Util.Trace("GetHarvestable() could not find any flora; running learning routine and returning None")
+		IH_Util.Trace("GetHarvestable() could not find any flora; running learning routine and returning None")
 		IH_FloraLearnerController.Run()
 		return None
 	endif
