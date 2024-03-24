@@ -65,6 +65,7 @@ IH_GetterCritterScript[] Property StandbyGetterCrittersGT Auto
 IH_GetterCritterScript[] Property ActiveGetterCritters Auto
 {Array of critters that are enabled and doing something; probably sparse}
 
+IH_FinderPointerHolderScript[] Property PointerHolders Auto
 
 int standbyCritterCount = 0
 int standbyCritterCountGT = 0
@@ -101,7 +102,7 @@ bool busy = false
 int Property version Auto
 
 int Function GetVersion()
-	return 010202 ; 01.02.02
+	return 010203 ; 01.02.03
 EndFunction
 
 Event OnInit()
@@ -109,9 +110,11 @@ Event OnInit()
 EndEvent
 
 Function Init()
+	IH_Util.Trace(self + " initializing!")
 	StandbyGetterCritters = new IH_GetterCritterScript[128]
 	ActiveGetterCritters = new IH_GetterCritterScript[128]
 	PathingMarkerCheckout = new bool[64]
+	ResyncPointerHolders()
 	if (cacheSize < 0)
 		cacheSize = GetNumAliases() - pathAliasCount - 1
 	endif
@@ -384,7 +387,7 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 		finderQuest.Stop()
 	endif
 	
-	IH_Util.Trace("Results array:\n\t\t" + FinderThreadResultsRefs + "\n\t\t" + FinderThreadResultsInts)
+	; IH_Util.Trace("Results array:\n\t\t" + FinderThreadResultsRefs + "\n\t\t" + FinderThreadResultsInts)
 	
 	ObjectReference[] toReturn = new ObjectReference[8] ; workerCount
 	i = 0
@@ -784,6 +787,8 @@ Function RecallAllCritters()
 	PrintCritterArray(StandbyGetterCritters)
 	IH_Util.Trace("Ignore any warnings about \"Skipped return to cache...\" following this line, those are harmless.")
 	
+	ResyncPointerHolders()
+	
 	IH_OperationFinishedRecall.Show(time)
 	busy = false
 EndFunction
@@ -893,6 +898,7 @@ Function DeleteGetterCritters()
 	
 	float time = Utility.GetCurrentRealTime()
 	
+	ClearFloraCaches()
 	RecallAllCritters()
 	
 	IH_Util.Trace("Getter critter Final Solution has been put into effect--sending critters to concentration camps...")
@@ -945,7 +951,7 @@ Function DeleteGetterCritters()
 		
 		i = refs.length - 1
 		IH_Util.Trace("Found " + i + " spawned IHarvest objects via SkyPal--deleting...")
-		while (i > 0)
+		while (i >= 0)
 			ObjectReference thing = refs[i]
 			if (thing != None)
 				Form base = thing.GetBaseObject()
@@ -1082,6 +1088,10 @@ Function CheckUpdates()
 			if (version < 10202)
 				v10202_UnsetCrittersTeammate()
 			endif
+			
+			if (version < 10203)
+				ResyncPointerHolders()
+			endif
 		endif
 		
 		IH_Util.Trace("Finished updates. New version is: " + versionCurrent)
@@ -1182,6 +1192,23 @@ bool Function VerifySkypalVersion(bool warn = false)
 		; deliberately return true anyway
 	endif
 	return true
+EndFunction
+
+Function ResyncPointerHolders()
+	int i = PointerHolders.length - 1
+	while (i >= 0)
+		IH_FinderPointerHolderScript ph = PointerHolders[i]
+		if (ph.RefPointer != FinderThreadResultsRefs)
+			IH_Util.Trace("PointerHolder " + ph + " RefPointer desynced! Fixing.")
+			ph.RefPointer = FinderThreadResultsRefs
+		endif
+		if (ph.IntPointer != FinderThreadResultsInts)
+			IH_Util.Trace("PointerHolder " + ph + " IntPointer desynced! Fixing.")
+			ph.IntPointer = FinderThreadResultsInts
+		endif
+		i -= 1
+	endwhile
+	IH_Util.Trace("PointerHolders synced.")
 EndFunction
 
 ;/ =========================== \;

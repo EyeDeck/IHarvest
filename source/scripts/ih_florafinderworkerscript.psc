@@ -61,7 +61,7 @@ Event OnUpdate()
 EndEvent
 
 Function DoExtraFiltering(ObjectReference this, Actor casterRef, int i, ObjectReference[] rA, int[] iA, Actor PlayerRef, ActorBase Player, bool ignoreOwnership) Global
-	IH_Util.Trace(" index " + i + " filled with " + this + ";\t\tiA=" + iA + ",\t\trA=" + rA)
+	; IH_Util.Trace(" index " + i + " filled with " + this + ";\t\tiA=" + iA + ",\t\trA=" + rA)
 
 	if (this == None)
 	;	IH_Util.Trace("\t" + self + " GetReference() is null.")
