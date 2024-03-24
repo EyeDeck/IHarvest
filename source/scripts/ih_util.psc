@@ -139,5 +139,6 @@ float[] Function GetClosestPointAtRadius(float startX, float startY, float start
 EndFunction
 
 Function Trace(string str, int severity = 0) Global
+{ 0 = Info, 1 = Warning, 2 = Error }
 	DEBUG.TraceUser("IHarvest", str, severity)
 EndFunction

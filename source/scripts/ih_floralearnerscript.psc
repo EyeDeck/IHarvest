@@ -3,6 +3,7 @@ Scriptname IH_FloraLearnerScript extends ReferenceAlias
 ;	- DLC1TrapPoisonBloom from Dawnguard
 ;	- USKP_NirnrootACTIVATORScript from USKP (bug #15589)
 ;	- BSKWispStalkACTIVATORScript from Beyond Skyrim - Bruma
+;	- wispCoreScript_lyu from Harvest Overhaul Redone
 ; For each of these, an empty script in \Source with just the header will work, e.g.
 ;	Scriptname DLC1TrapPoisonBloom extends ObjectReference
 ; Then just save them as <scriptname>.psc and the compiler should stop complaining.
@@ -115,6 +116,13 @@ Function DoThing()
 		return
 	endif
 	
+	if (this as NirnrootACTIVATORScript || this as USKP_NirnrootACTIVATORScript )
+		; unofficial patch adds an additional nirnroot script, used at Sarethi Farm
+		IH_LearnedTypes.AddForm(base)
+		IH_Util.Trace("\tLearner: Learned NirnrootACTIVATORScript " + this + "/" + base)
+		return
+	endif
+	
 	DLC1TrapPoisonBloom thisPB = this as DLC1TrapPoisonBloom
 	if (thisPB != None)
 		if (thisPB.myIngredient != None || IH_Util.ProducesIngredient(thisPB.myMiscObject, learnFood) || IH_Util.ProducesIngredient(thisPB.myPotion, learnFood))
@@ -126,10 +134,10 @@ Function DoThing()
 		return
 	endif
 	
-	if (this as NirnrootACTIVATORScript || this as USKP_NirnrootACTIVATORScript )
-		; unofficial patch adds an additional nirnroot script, used at Sarethi Farm
+	if (this as wispCoreScript || this as wispCoreScript_lyu)
+		; wispCoreScript_lyu is from Harvest Overhaul Redone
 		IH_LearnedTypes.AddForm(base)
-		IH_Util.Trace("\tLearner: Learned NirnrootACTIVATORScript " + this + "/" + base)
+		IH_Util.Trace("\tLearner: Learned wispCoreScript " + this + "/" + base)
 		return
 	endif
 	

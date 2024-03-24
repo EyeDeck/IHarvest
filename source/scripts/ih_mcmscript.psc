@@ -7,6 +7,8 @@ GlobalVariable Property IH_InheritGreenThumb Auto
 GlobalVariable Property IH_LearnFood Auto
 GlobalVariable Property IH_SpawnDistanceMult Auto
 GlobalVariable Property IH_OffsetReturnPoint Auto
+GlobalVariable Property IH_StaffDrainPerSpawn Auto
+GlobalVariable Property IH_MagickaDrainPerSpawn Auto
 
 IH_PersistentDataScript Property IH_PersistentData Auto
 
@@ -20,41 +22,34 @@ int OIDfood
 int OIDspawnDist
 int OIDreturnOffset
 int OIDstats
+int OIDstaffdrain
+int OIDmagickadrain
 
 Event OnPageReset(string a_page)
 	if (a_page == "")
-		AddHeaderOption("Getter Critters")
-		AddEmptyOption()
-		
-		float crittercap = IH_CritterCap.GetValue()
-		OIDcrittercap = AddSliderOption("Max Concurrent Critters", crittercap, "{0}")
-		
-		OIDgt = AddToggleOption("Use Green Thumb", IH_InheritGreenThumb.GetValue() as bool)
-		
-		float spawnDist = IH_SpawnDistanceMult.GetValue()
-		OIDspawnDist = AddSliderOption("Spawn Distance Multiplier", spawnDist, "{1}")
-		
-		OIDrecall = AddTextOption("Recall Active Critters", "[ ]")
-		
-		float returnOffset = IH_OffsetReturnPoint.GetValue()
-		OIDreturnOffset = AddSliderOption("Critter Return Distance Offset", returnOffset, "{0}")
-		
-		OIDstats = AddTextOption("Show Critter Stats", "[ ]")
-		
 		SetCursorFillMode(TOP_TO_BOTTOM)
 		
-		AddEmptyOption()
-		
-		AddHeaderOption("Experience")
-		float exp = IH_CastExp.GetValue()
-		OIDexp = AddSliderOption("Experience Per Cast", exp, "{2}")
-		
-		AddEmptyOption()
-		
-		AddHeaderOption("Misc")
-		OIDclear = AddTextOption("Clear Flora Cache", "[ ]")
+		AddHeaderOption("Spell Options")
+		OIDmagickadrain = AddSliderOption("Magicka Cost Per Cast (Spell)", IH_MagickaDrainPerSpawn.GetValue(), "{2}")
+		OIDstaffdrain = AddSliderOption("Enchant Charge Per Cast (Staff)", IH_StaffDrainPerSpawn.GetValue(), "{2}")
+		OIDexp = AddSliderOption("Experience Per Cast", IH_CastExp.GetValue(), "{2}")
 		OIDnspam = AddToggleOption("Item Notification Spam", IH_NotificationSpam.GetValue() as bool)
 		OIDfood = AddToggleOption("Harvest Food", IH_LearnFood.GetValue() as bool)
+		
+		AddEmptyOption()
+		
+		AddHeaderOption("Maintenance")
+		OIDrecall = AddTextOption("Recall Active Critters", "[ ]")
+		OIDclear = AddTextOption("Clear Flora Cache", "[ ]")
+		
+		SetCursorPosition(1) ; top right
+		
+		AddHeaderOption("Getter Critters")
+		OIDcrittercap = AddSliderOption("Max Concurrent Critters", IH_CritterCap.GetValue(), "{0}")
+		OIDspawnDist = AddSliderOption("Spawn Distance Multiplier", IH_SpawnDistanceMult.GetValue(), "{1}")
+		OIDreturnOffset = AddSliderOption("Critter Return Distance Offset", IH_OffsetReturnPoint.GetValue(), "{0}")
+		OIDgt = AddToggleOption("Use Green Thumb", IH_InheritGreenThumb.GetValue() as bool)
+		OIDstats = AddTextOption("Show Critter Stats", "[ ]")
 	endif
 EndEvent
 
@@ -98,6 +93,16 @@ Event OnOptionSliderOpen(int a_option)
 		SetSliderDialogDefaultValue(0.0)
 		SetSliderDialogRange(0.0, 1000.0)
 		SetSliderDialogInterval(1.0)
+	elseif (a_option == OIDstaffdrain)
+		SetSliderDialogStartValue(IH_StaffDrainPerSpawn.GetValue())
+		SetSliderDialogDefaultValue(12.0)
+		SetSliderDialogRange(0.0, 100.0)
+		SetSliderDialogInterval(0.25)
+	elseif (a_option == OIDmagickadrain)
+		SetSliderDialogStartValue(IH_MagickaDrainPerSpawn.GetValue())
+		SetSliderDialogDefaultValue(5.0)
+		SetSliderDialogRange(0.0, 100.0)
+		SetSliderDialogInterval(0.25)
 	endif
 EndEvent
 
@@ -114,6 +119,12 @@ Event OnOptionSliderAccept(int a_option, float a_value)
 	elseif (a_option == OIDreturnOffset)
 		IH_OffsetReturnPoint.SetValue(a_value)
 		SetSliderOptionValue(a_option, a_value, "{0}")
+	elseif (a_option == OIDstaffdrain)
+		IH_StaffDrainPerSpawn.SetValue(a_value)
+		SetSliderOptionValue(a_option, a_value, "{2}")
+	elseif (a_option == OIDmagickadrain)
+		IH_MagickaDrainPerSpawn.SetValue(a_value)
+		SetSliderOptionValue(a_option, a_value, "{2}")
 	endif
 EndEvent
 
@@ -135,6 +146,10 @@ Event OnOptionDefault(int a_option)
 		OnOptionSliderAccept(a_option, 1.0)
 	elseif (a_option == OIDreturnOffset)
 		OnOptionSliderAccept(a_option, 150.0)
+	elseif (a_option == OIDstaffdrain)
+		OnOptionSliderAccept(a_option, 12.0)
+	elseif (a_option == OIDmagickadrain)
+		OnOptionSliderAccept(a_option, 5.0)
 	endif
 EndEvent
 
@@ -142,11 +157,11 @@ Event OnOptionHighlight(int a_option)
 	if (a_option == OIDcrittercap)
 		SetInfoText("How many Getter Critters can be active at a time.\nThe default value should be fine, but you can try lowering it if you experience game instability while casting.")
 	elseif (a_option == OIDrecall)
-		SetInfoText("Debug option: Immediately returns all currently active critters to the cache, and checks and fixes cache errors if present.")
+		SetInfoText("Immediately returns all active critters to the cache, and attempts to fix any cache errors if present.\nYou can try running this if any critters become stuck, or if the mod generally becomes unresponsive.\nAfter running this, don't cast any Harvest spells until you see the completion notification.")
 	elseif (a_option == OIDexp)
 		SetInfoText("How much Alteration exp to award per Getter Critter summon.")
 	elseif (a_option == OIDclear)
-		SetInfoText("Clears all examined/learned harvestables, as well as the temporary reference cache.\nRun this if you install a mod that adds or edits harvestables mid-save, or change the food setting below.")
+		SetInfoText("Clears all examined/learned harvestables, as well as the temporary reference cache.\nRun this if you install a mod that adds or edits harvestables mid-save, or change the food setting above.\nAfter running this, don't cast any Harvest spells until you see the completion notification.")
 	elseif (a_option == OIDnspam)
 		SetInfoText("Toggles the \"<item> Added\" notifications, as well as item pickup sounds that play when a Getter Critter returns.")
 	elseif (a_option == OIDgt)
@@ -159,6 +174,10 @@ Event OnOptionHighlight(int a_option)
 		SetInfoText("Values above zero will control how close critters will AI pathfind back to the caster before despawning.\nThis can help reduce how often critters bump the caster, though AI pathfinding still tends to be unpredictable.\n64 units = 1 yard")
 	elseif (a_option == OIDstats)
 		SetInfoText("Show a message box containing recorded mod stats.\nNote that this will not be accurate if run while any critters are active.")
+	elseif (a_option == OIDstaffdrain)
+		SetInfoText("Amount of charge to drain from the a Staff of Harvest per critter spawn.\nNote that the staff has a capacity of 4,000.")
+	elseif (a_option == OIDmagickadrain)
+		SetInfoText("Amount of magicka to drain per critter spawn.\nNote that Alteration cost reduction is capped at 85% for this spell.")
 	endif
 EndEvent
 

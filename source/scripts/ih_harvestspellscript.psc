@@ -13,7 +13,6 @@ GlobalVariable Property IH_CastExp Auto
 GlobalVariable Property IH_SpawnDistanceMult Auto
 
 GlobalVariable Property IH_CurrentSearchRadius Auto
-; GlobalVariable Property IH_LearnerRunning Auto ; v1.0.9: deprecated, hasn't been useful since v1.0.4
 
 Actor caster
 
@@ -69,16 +68,44 @@ bool dualCasting = false
 
 bool hasGreenThumb = false
 
+float baseCost = 5.0
+float alterationMod = 1.0
+
 float casterSpeedMult = 100.0
 bool casterIsRunning = false
+
+bool Property IsStaff = false Auto
+{Controls whether to run staff charge, or magicka drain code}
+Keyword Property IH_IsHarvestStaff Auto
+bool staffHand
+
+GlobalVariable Property IH_StaffDrainPerSpawn Auto
+GlobalVariable Property IH_MagickaDrainPerSpawn Auto
+float Property MinSpellReduction Auto
+{Spell (not staff) critter spawns will always cost at least this % of base}
 
 Event OnEffectStart(Actor akTarget, Actor akCaster)
 ;	IH_Util.Trace("Cast effect starting")
 	cachedFloraCount = 0
 	caster = akCaster
 	
-	if (caster.GetAnimationVariableBool("IsCastingDual"))
-		dualCasting = true
+	if (IsStaff)
+		Weapon left = caster.GetEquippedWeapon(false)
+		if (left && left.HasKeyword(IH_IsHarvestStaff))
+			staffHand = false
+		else
+			staffHand = true
+		endif
+	else
+		if (caster.GetAnimationVariableBool("IsCastingDual"))
+			dualCasting = true
+		endif
+		baseCost = IH_MagickaDrainPerSpawn.GetValue()
+		
+		alterationMod = (100.0 - caster.GetActorValue("AlterationMod")) / 100
+		if (alterationMod < MinSpellReduction)
+			alterationMod = MinSpellReduction
+		endif
 	endif
 	
 	if (IH_InheritGreenThumb.GetValue() > 0.0 && caster.HasPerk(GreenThumb))
@@ -157,11 +184,23 @@ Event OnUpdate()
 ;	endif
 EndEvent
 
-Function StopCast()
-	caster.InterruptCast()
-EndFunction
-
 Function DoCast()
+	float cost
+	if (IsStaff)
+		cost = IH_StaffDrainPerSpawn.GetValue()
+		if ((staffHand && caster.GetActorValue("LeftItemCharge") < cost) || (!staffHand && caster.GetActorValue("RightItemCharge") < cost))
+			; caster.RemoveSpell(IH_HarvestStaffAbility)
+			self.Dispel()
+			return
+		endif
+	else
+		cost = baseCost*alterationMod
+		if (caster.GetActorValue("Magicka") < cost)
+			caster.InterruptCast()
+			return
+		endif
+	endif
+	
 ;	IH_Util.Trace("Casting; current radius: " + radius + "/" + maxRadius + "; current delay:" + delay + "/" + minDelay + ", accel: " + accel)
 	ObjectReference thing = GetHarvestable()
 	
@@ -213,6 +252,16 @@ Function DoCast()
 	if (caster == PlayerRef)
 		Game.AdvanceSkill("Alteration", IH_CastExp.GetValue())
 		;~_Util.Trace("Raised Alteration by " + SkillAdvancement)
+	endif
+	
+	if (IsStaff)
+		if (staffHand)
+			caster.DamageActorValue("LeftItemCharge", cost)
+		else
+			caster.DamageActorValue("RightItemCharge", cost)
+		endif
+	else
+		caster.DamageActorValue("Magicka", cost)
 	endif
 EndFunction
 

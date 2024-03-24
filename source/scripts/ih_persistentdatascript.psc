@@ -74,6 +74,10 @@ bool busy = false
 
 int Property version Auto
 
+int Function GetVersion()
+	return 010100 ; 01.01.00
+EndFunction
+
 Event OnInit()
 	Init()
 EndEvent
@@ -112,6 +116,11 @@ Event OnUpdate()
 	;~_Util.Trace("IGN: Cleared ignored object from cache ID " + thisIndex)
 EndEvent
 
+Function OnGameLoad()
+{Called by other code when the player loads a game}
+	CheckUpdates()
+; SyncNonPersistent()
+EndFunction
 
 Function AddIgnoredObject(ObjectReference thing)
 	int thisIndex = leadingIndex
@@ -215,8 +224,8 @@ IH_GetterCritterScript Function GetGetterCritter2(Actor caster, bool gt)
 		return None
 	endif
 	
-	; v1.0.1: I hate this function now, but I don't want to put like five different checks for gt because I know the Papyrus compiler won't optimize it out
-	; hopefully I'll never have to touch this code again anyway
+	; v1.0.1: I hate this function now, but I don't want to put like five different checks for gt, because
+	; I know the Papyrus compiler won't optimize it out. Hopefully I'll never have to touch this code again, anyway.
 	if (gt)
 		if (standbyCritterCountGT == 0)
 			toReturn = caster.PlaceAtMe(IH_GetterCritterGT, 1, false, true) as IH_GetterCritterScript
@@ -494,8 +503,8 @@ Function ClearFloraCaches()
 	
 	IH_FloraLearnerController.VerifyState()
 	
-	IH_ExaminedTypes.Revert()
 	IH_LearnedTypes.Revert()
+	IH_ExaminedTypes.Revert()
 	
 	int i = 0
 	while (i < cacheSize)
@@ -511,6 +520,7 @@ EndFunction
 ; Mostly for fixing my own save that I made a mess of while playtesting
 Function RecallAllCritters()
 	float time = Utility.GetCurrentRealTime()
+	string st
 	
 	IH_Util.Trace("Recalling all critters...\n\tActiveGetterCritters:")
 	PrintCritterArray(ActiveGetterCritters)
@@ -521,7 +531,8 @@ Function RecallAllCritters()
 	while (i < ActiveGetterCritters.Length)
 		IH_GetterCritterScript c = ActiveGetterCritters[i]
 		if (c != None)
-			IH_Util.Trace("\tRecalling critter " + c + " in state: " + ActiveGetterCritters[i].GetState())
+			st = ActiveGetterCritters[i].GetState()
+			IH_Util.Trace("\tRecalling critter " + c + " in state: " + st)
 			ActiveGetterCritters[i].Cleanup()
 		endif
 		; recheck that the cleanup function did actually do its job, if not forcibly fix cache
@@ -542,54 +553,19 @@ Function RecallAllCritters()
 	IH_Util.Trace("...deduping arrays...")
 	
 	standbyCritterCount = 0
+	standbyCritterCountGT = 0
 	
 	i = 127
 	int j
 	while (i >= 0)
-		IH_GetterCritterScript a = ActiveGetterCritters[i]
-		IH_GetterCritterScript b
-		if (a != None)
-			j = i - 1
-			while (j >= 0)
-				b = ActiveGetterCritters[j]
-				if (a == b)
-					IH_Util.Trace("\tDeduped ActiveGetterCritters index " + i + "/" + j)
-					ActiveGetterCritters[i] = None
-				endif
-				j -= 1
-			endwhile
-		endif
+		DedupeAndCleanIndex(ActiveGetterCritters, "ActiveGetterCritters", i, None)
 		
-		a = StandbyGetterCritters[i]
-		if (a != None)
-			j = i - 1
-			while (j >= 0)
-				b =  StandbyGetterCritters[j]
-				if (a == b)
-					IH_Util.Trace("\tDeduped StandbyGetterCritters index " + i + "/" + j)
-					StandbyGetterCritters[i] = None
-					standbyCritterCount -= 1
-				endif
-				j -= 1
-			endwhile
-			
+		if (DedupeAndCleanIndex(StandbyGetterCritters, "StandbyGetterCritters", i, "Done"))
 			standbyCritterCount += 1
 		endif
 		
-		a = StandbyGetterCrittersGT[i]
-		if (a != None)
-			j = i - 1
-			while (j >= 0)
-				b =  StandbyGetterCrittersGT[j]
-				if (a == b)
-					IH_Util.Trace("\tDeduped StandbyGetterCrittersGT index " + i + "/" + j)
-					StandbyGetterCrittersGT[i] = None
-					standbyCritterCountGT -= 1
-				endif
-				j -= 1
-			endwhile
-			
-			standbyCritterCount += 1
+		if (DedupeAndCleanIndex(StandbyGetterCrittersGT, "StandbyGetterCrittersGT", i, "Done"))
+			standbyCritterCountGT += 1
 		endif
 		
 		i -= 1
@@ -610,56 +586,47 @@ Function RecallAllCritters()
 	PathingMarkerCheckout = new bool[64]
 	
 	time = Utility.GetCurrentRealTime() - time
-	IH_Util.Trace("...Recall routine finished in " + time + "s. Active#: " + activeCritterCount + ", Standby#: " + standbyCritterCount + ", Redumping arrays:\n\tActiveGetterCritters:")
+	IH_Util.Trace("...Recall routine finished in " + time + "s. Active#: " + activeCritterCount + ", Standby#: " + standbyCritterCount + "/" + standbyCritterCountGT + ", Redumping arrays:\n\tActiveGetterCritters:")
 	PrintCritterArray(ActiveGetterCritters)
 	IH_Util.Trace("\n\tStandbyGetterCritters: ")
 	PrintCritterArray(StandbyGetterCritters)
+	IH_Util.Trace("Ignore any warnings about \"Skipped return to cache...\" following this line, those are harmless.")
 	
 	IH_OperationFinishedRecall.Show(time)
-	
-	;/ just testing some performance related stuff, because according to SMKViper:
-	;	There is a special case for the array find and rfind functions which are actually opcodes, and so do not have any of the overhead associated with function calls.
-	; I have always assumed these to be latent function calls, because the wiki does not mention otherwise like it does for other non-delayed function calls.
-	int[] test = new int[64]
-	float time = Utility.GetCurrentRealTime()
-	i = 0
-	while (i < test.length)
-		test[i] = i
-		i += 1
-	endwhile
-	i = 0
-	int bleh
-	IH_Util.Trace("Starting Find test")
-	while (i < 10000)
-		bleh = test.Find(32, 0)
-		i += 1
-	endwhile
-	IH_Util.Trace("Array.Find() test finished, total time elapsed: " + (Utility.GetCurrentRealTime() - time) + " \\ retrying in Papyrus: ")
-	time = Utility.GetCurrentRealTime()
-	i = 0
-	while (i < 10000)
-		bleh = FindTest(test, 32, 0)
-		i += 1
-	endwhile
-	IH_Util.Trace("FindTest() test finished, total time elapsed: " + (Utility.GetCurrentRealTime() - time))
-	
-	; results:
-	; [08/24/2019 - 07:55:27PM] Starting Find test
-	; [08/24/2019 - 07:55:27PM] Array.Find() test finished, total time elapsed: 0.059006 \ retrying in Papyrus: 
-	; [08/24/2019 - 07:55:48PM] FindTest() test finished, total time elapsed: 2.449997
-	; looks like I get to rewrite some code...
-	; /;
 EndFunction
 
-;/ int Function FindTest(int[] in, int target, int i = 0)
-	while (i < in.length)
-		if (in[i] == target)
-			return i
+bool Function DedupeAndCleanIndex(IH_GetterCritterScript[] arr, string arrName, int i, string expected)
+	IH_GetterCritterScript a = arr[i]
+	IH_GetterCritterScript b
+	int j
+	string st
+	
+	if (a == None)
+		return false
+	endif
+
+	st = a.GetState()
+	if (st == "Deleted")
+		a.Delete()
+		arr[i] = None
+		IH_Util.Trace("\tRemoved deleted " + a + " from " + arrName + " index " + i)
+		return false
+	elseif (expected && st != expected)
+		IH_Util.Trace("\tWarning: " + a + " from " + arrName + " index " + i + " in state " + st + " instead of expected " + expected + " - check this", 1)
+	endif
+	
+	j = i - 1
+	while (j >= 0)
+		b =  arr[j]
+		if (a == b)
+			IH_Util.Trace("\tDeduped " + arrName + " index " + i + "/" + j)
+			arr[i] = None
 		endif
-		i += 1
+		j -= 1
 	endwhile
-	return -1
-EndFunction /;
+	
+	return true
+EndFunction
 
 Function PrintCritterArray(IH_GetterCritterScript[] arr)
 	int l = arr.Length
@@ -721,9 +688,9 @@ Function TallyCritterStats()
 EndFunction
 
 Function CheckUpdates()
-	int versionCurrent = 010009 ; 01.00.09
+	int versionCurrent = GetVersion()
 	
-	Form f
+;	Form f
 	
 	Debug.Trace(self + " Checking if SKSE is installed (this may error)...")
 	IH_Util.Trace("Checking if SKSE is installed...")
@@ -765,10 +732,10 @@ Function CheckUpdates()
 			StandbyGetterCrittersGT = new IH_GetterCritterScript[128]
 		else
 			; update code NOT to apply on first run
-			if (version < 10007)
-				IH_Util.Trace("\tv1.0.7: Clearing flora cache so updated learner script can re-run")
+			if (version < 10100)
+				IH_Util.Trace("\tv1.1.0: Clearing flora cache so updated learner script can re-run")
 				ClearFloraCaches()
-			elseif (version < 10009)
+			;/ elseif (version < 10009)
 				f = Game.GetFormFromFile(0x6025B3, "BSAssets.esm")
 				if (f)
 					IH_ExaminedTypes.RemoveAddedForm(f)
@@ -778,6 +745,7 @@ Function CheckUpdates()
 				else
 					Debug.Trace(self + " Ignore that error about GetFormFromFile")
 				endif
+			; /;
 			endif
 			
 		endif
@@ -790,6 +758,20 @@ Function CheckUpdates()
 		IH_UpdateUnsupported.Show(version / 10000.0, versionCurrent / 10000.0)
 	endif
 	version = versionCurrent
+EndFunction
+
+Function SyncNonPersistent()
+;/
+	float config = IH_StaffDrainPerSpawn.GetValue()
+	if (config == 15.0)
+		IH_Util.Trace("No need to sync configurable staff drain magnitude.")
+		return
+	endif
+	
+	IH_StaffDrainLeftSpell.SetNthEffectMagnitude(0, config)
+	IH_StaffDrainRightSpell.SetNthEffectMagnitude(0, config)
+	IH_Util.Trace("Synced configurable staff drain magnitude.")
+/;
 EndFunction
 
 ;/ =========================== \;

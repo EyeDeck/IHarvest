@@ -44,7 +44,7 @@ Event OnInit()
 EndEvent
 
 bool Function SetTargets2(Actor c, ObjectReference t, float speed)
-	IH_Util.Trace(self + " SetTargets called in wrong state " + GetState() + "; ignoring call and dumping stack trace.", 2)
+	IH_Util.Trace(self + " SetTargets called in wrong state " + GetState() + "; ignoring call and dumping stack trace.", 1)
 	Debug.TraceStack(self + " printing SetTargets stack trace")
 	return false
 EndFunction
@@ -52,13 +52,20 @@ EndFunction
 State Init
 	;This needs to run async from the thread that spawned it, so we just send a single update with no delay to kick it off	
 	Event OnUpdate()
+		if (Caster == None || Target == None)
+			IH_Util.Trace("\t" + self + " OnUpdate() called in Init state, but Caster = " + Caster + ", and Target = " + Target + ", which is invalid. Ignoring.", 1)
+			Cleanup()
+			return
+		endif
+		GoToState("Started")
+		
 		;~_Util.Trace(self + " Critter's thread started")
 		
 		; place in front of the caster
 		float angle = Caster.GetAngleZ()
 		; float zOffset = 128 / Math.tan(Caster.GetAngleX())
 		;;~ebug.TraceUser("IHarvest", zOffset)
-		MoveTo(Caster, 128.0 * casterSpeedMult * Math.sin(angle), 128.0 * casterSpeedMult * Math.cos(angle), 0.0, true)
+		MoveTo(Caster, 192.0 * casterSpeedMult * Math.sin(angle), 192.0 * casterSpeedMult * Math.cos(angle), 0.0, true)
 		; SetPosition(Caster.GetPositionX() + 128.0 * Math.sin(angle), Caster.GetPositionY() + 128.0 * Math.cos(angle), Caster.GetPositionZ() + zOffset)
 		; MoveTo totally ignores the zOffset argument apparently, and SetPosition does insane things *shrug*
 		
@@ -363,12 +370,13 @@ EndState
 
 State Done
 	bool Function SetTargets2(Actor c, ObjectReference t, float speed)
+		active = true
+		
 		;~_Util.Trace(self + " going after " + t)
+		casterSpeedMult = speed / 100.0
+		returnPointOffset = IH_OffsetReturnPoint.GetValue()
 		Caster = c
 		Target = t
-		casterSpeedMult = speed / 100.0
-		active = true
-		returnPointOffset = IH_OffsetReturnPoint.GetValue()
 		GotoState("Init")
 		RegisterForSingleUpdate(0.0)
 		return true
@@ -601,12 +609,11 @@ Function Cleanup()
 	ModActorValue("Fame", 1.0)
 	
 	if (active)
+		active = false
 		IH_PersistentData.ReturnGetterCritter2(self, HasGreenThumb)
 	else
 		IH_Util.Trace(self + " Skipped return to cache becasue \"active\" is false, which would likely have caused cache confusion.", 1)
 	endif
-	
-	active = false
 EndFunction
 
 Function Delete()

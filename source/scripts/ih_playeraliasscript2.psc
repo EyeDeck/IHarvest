@@ -13,5 +13,5 @@ EndEvent
 
 Event OnUpdate()
 	Debug.OpenUserLog("IHarvest")
-	IH_PersistentData.CheckUpdates()
+	IH_PersistentData.OnGameLoad()
 EndEvent
