@@ -8,7 +8,9 @@ VisualEffect Property IH_AbsorbGreenCastVFX Auto
 Sound Property IH_SFXGetterCritterDespawn Auto
 Form Property IH_FXGetterCritterSpawnPoof Auto
 Package Property IH_GetterCritterIdle Auto
+
 GlobalVariable Property IH_NotificationSpam Auto
+GlobalVariable Property IH_OffsetReturnPoint Auto
 
 Actor Property Caster Auto
 ObjectReference Property Target Auto
@@ -24,6 +26,8 @@ float lastX = 0.0
 float lastY = 0.0
 float lastZ = 0.0
 float stucktime = 0.0
+float casterSpeedMult = 1.0
+float returnPointOffset = 0.0
 ObjectReference CurrentPathTarget
 ReferenceAlias CurrentPathAlias
 ObjectReference PathingMarker
@@ -39,7 +43,7 @@ Event OnInit()
 	GoToState("Done")
 EndEvent
 
-bool Function SetTargets(Actor c, ObjectReference t)
+bool Function SetTargets2(Actor c, ObjectReference t, float speed)
 	IH_Util.Trace(self + " SetTargets called in wrong state " + GetState() + "; ignoring call and dumping stack trace.")
 	Debug.TraceStack(self + " printing SetTargets stack trace")
 	return false
@@ -54,7 +58,7 @@ State Init
 		float angle = Caster.GetAngleZ()
 		; float zOffset = 128 / Math.tan(Caster.GetAngleX())
 		;;~ebug.TraceUser("IHarvest", zOffset)
-		MoveTo(Caster, 196.0 * Math.sin(angle), 196.0 * Math.cos(angle), 0.0)
+		MoveTo(Caster, 128.0 * casterSpeedMult * Math.sin(angle), 128.0 * casterSpeedMult * Math.cos(angle), 0.0, true)
 		; SetPosition(Caster.GetPositionX() + 128.0 * Math.sin(angle), Caster.GetPositionY() + 128.0 * Math.cos(angle), Caster.GetPositionZ() + zOffset)
 		; MoveTo totally ignores the zOffset argument apparently, and SetPosition does insane things *shrug*
 		
@@ -90,16 +94,31 @@ State Init
 		endif
 		
 		; get the critter started, but not directly back into the caster's face
-		angle += 720 ; make sure we're not dealing with annoying wraparound
-		float tgtAngle = angle + GetHeadingAngle(Target)
-		if (tgtAngle > angle + 135.0)
-		;	IH_Util.Trace("capped to +135")
-			tgtAngle = angle + 135.0
-		elseif (tgtAngle < angle - 135.0)
-		;		IH_Util.Trace("capped to -135")
-			tgtAngle = angle - 135.0
+		float ha = GetHeadingAngle(Target)
+		if (casterSpeedMult >= 0.0)
+			if (ha >= 0.0)
+				if (ha > 140.0)
+					ha = 140.0
+				endif
+			else
+				if (ha < -140.0)
+					ha = -140.0
+				endif
+			endif
+		else
+			if (ha >= 0.0)
+				if (ha < 40.0)
+					ha = 40.0
+				endif
+			else
+				if (ha > -40.0)
+					ha = -40.0
+				endif
+			endif
+			SetAngle(0.0, 0.0, GetAngleZ() - 180.0)
 		endif
-		tgtAngle = IH_Util.NormalizeAngle(tgtAngle)
+		float tgtAngle = angle + ha
+		; IH_Util.Trace(angle + " " + ha + " " + tgtAngle)
 		
 		SplineTranslateTo(GetPositionX() + 320.0 * Math.sin(tgtAngle), GetPositionY() + 320.0 * Math.cos(tgtAngle), GetPositionZ() + 64.0, 0.0, 0.0, tgtAngle, 452.5483399, 500.0, 0.0)
 		
@@ -191,9 +210,12 @@ State Init
 		if (pathingMarkerID >= 0)
 			; set up the pathing marker while translating
 			CurrentPathTarget = Caster
-			PathingMarker.MoveTo(CurrentPathTarget)
-			; Hoped this would make the critter smash into the player less, but turns out it's the same except slower
-			; MoveToClosestRadius(PathingMarker, CurrentPathTarget, 64.0, 96.0)
+			if (returnPointOffset > 0.0)
+				IH_Util.Trace(CurrentPathTarget)
+				MoveToClosestRadius(PathingMarker, CurrentPathTarget, returnPointOffset, returnPointOffset * 1.25)
+			else
+				PathingMarker.MoveTo(CurrentPathTarget)
+			endif
 		endif
 		
 		; now go back to the point before we took over with translates
@@ -216,7 +238,11 @@ State Init
 			IH_PersistentData.ReturnPathingAlias(pathingMarkerID)
 		endif
 		
-		TranslateWithinRadius(Caster, 0.0, 128.0, 384.0, 800.0, true, 0, 1.5)
+		if (returnPointOffset < 196.0)
+			TranslateWithinRadius(Caster, 0.0, 196.0, 384.0, 800.0, true, 0, 1.5)
+		else
+			TranslateWithinRadius(Caster, 0.0, returnPointOffset, returnPointOffset*1.25, 800.0, true, 0, 1.5)
+		endif
 		
 		if (Is3dLoaded())
 			SpawnExplosion.MoveToNode(self, "Witchlight Body Lag")
@@ -274,7 +300,7 @@ State Pathing
 			;IH_Util.Trace(thistime + " " + stucktime)
 			if (stucktime == 0.0)
 				stucktime = thistime
-			elseif (thistime > stucktime + 1.25)
+			elseif (thistime > stucktime + 1.75)
 				;~_Util.Trace("Getter Critter " + self + " got stuck while pathing; interrupting")
 				StopPathing()
 				return
@@ -288,9 +314,12 @@ State Pathing
 		
 		if (CurrentPathTarget)
 			if (CurrentPathTarget == Caster)
-				;MoveToClosestRadius(PathingMarker, CurrentPathTarget, 64.0, 96.0)
 				if (PathingMarker) ; (pathingMarkerID >= 0)
-					PathingMarker.MoveTo(CurrentPathTarget)
+					if (returnPointOffset > 0.0)
+						MoveToClosestRadius(PathingMarker, CurrentPathTarget, returnPointOffset, returnPointOffset * 1.25)
+					else
+						PathingMarker.MoveTo(CurrentPathTarget)
+					endif
 				endif
 				RegisterForSingleUpdate(0.125)
 			else
@@ -325,11 +354,13 @@ State Translating
 EndState
 
 State Done
-	bool Function SetTargets(Actor c, ObjectReference t)
+	bool Function SetTargets2(Actor c, ObjectReference t, float speed)
 		;~_Util.Trace(self + " going after " + t)
 		Caster = c
 		Target = t
+		casterSpeedMult = speed / 100.0
 		active = true
+		returnPointOffset = IH_OffsetReturnPoint.GetValue()
 		GotoState("Init")
 		RegisterForSingleUpdate(0.0)
 		return true
@@ -423,7 +454,7 @@ Function TranslateWithinRadiusCoords(float targetX, float targetY, float targetZ
 		return
 	endif
 	
-	float[] targetCoords = GetClosestPointAtRadius(posX, posY, posZ, targetX, targetY, targetZ, radius, dist)
+	float[] targetCoords = IH_Util.GetClosestPointAtRadius(posX, posY, posZ, targetX, targetY, targetZ, radius, dist)
 	
 	if (faceTargetFirst)
 		SetAngle(0.0, 0.0, targetCoords[3])
@@ -459,68 +490,26 @@ bool Function SplineTranslateToLatent(float targetX, float targetY, float target
 	return true
 EndFunction
 
-; cylindrical instead of spherical radius because I can't be bothered calculating a sphere
-float[] Function GetClosestPointAtRadius(float startX, float startY, float startZ, float targetX, float targetY, float targetZ, float radius, float distance = -1.0)
-	if (distance > 0.0)
-		distance = IH_Util.GetObjectDistance(startX, startY, startZ, targetX, targetY, targetZ)
-	endif
-	float[] out = new float[4]
-	
-	; can't just GetHeadingAngle, so we have to calc atan2 manually
-	float xDiff = targetX - startX
-	float yDiff = targetY - startY
-	float atan2 = 0.0
-	if (yDiff > 0.01 || yDiff < -0.01) ; checking == 0.0 still causes div by 0 errors sometimes
-		atan2 = xDiff*xDiff + yDiff*yDiff
-		if (atan2 > 0.01)
-			; same as above, without this check this line will produce div by 0 errors sometimes `\_@_/`
-			; this is despite Math.sqrt(0) not even being a mathematically invalid operation anyway
-			atan2 = Math.sqrt(atan2) - xDiff
-		else
-			atan2 -= xDiff
-		endif
-		
-		atan2 /= yDiff
-		atan2 = Math.atan(atan2) * 2
-	elseif (xDiff > 0.01 || xDiff < -0.01)
-		atan2 = Math.atan(yDiff / xDiff)
-		if (xDiff < 0.0)
-			atan2 += 180.0
-		endif
-	endif
-;	IH_Util.Trace("Calculated angle between (" + startX + "," + startY + ") and (" + targetX + "," + targetY + ") as " + atan2)
-	
-	float scale = radius / distance
-	targetX -= (targetX - startX) * scale
-	targetY -= (targetY - startY) * scale
-	targetZ -= (targetZ - startZ) * scale
-	
-	out[0] = targetX
-	out[1] = targetY
-	out[2] = targetZ
-	out[3] = atan2
-	return out
-EndFunction
-
 Function MoveToClosestRadius(ObjectReference ref, ObjectReference tgt, float radius, float skipRadius)
+	if (ref.GetDistance(tgt) < skipRadius)
+		return
+	endif
+	float posX = ref.GetPositionX() ; not to be confused with POSIX
+	float posY = ref.GetPositionY()
+	float posZ = ref.GetPositionZ()
+	
 	; It's generally a bad idea to constantly poll an actor's position, especially the player, because it'll lead to
 	; lock issues with other threads—however, we do still need to measure our target's coordinates frequently.
 	; So, if we create a ref that we just move to the target and measure from that, we can get the same coordinates,
 	; just faster because no other thread will be trying to interact with it too.
-	if (ref.GetDistance(tgt) < skipRadius)
-		return
-	endif
-	float posX = GetPositionX() ; not to be confused with POSIX
-	float posY = GetPositionY()
-	float posZ = GetPositionZ()
-	
 	MeasurementMarker.MoveTo(tgt)
 	float targetX = MeasurementMarker.GetPositionX()
 	float targetY = MeasurementMarker.GetPositionY()
 	float targetZ = MeasurementMarker.GetPositionZ()
 	
-	float[] targetCoords = GetClosestPointAtRadius(posX, posY, posZ, targetX, targetY, targetZ, radius)
-	ref.SetPosition(targetCoords[0], targetCoords[1], targetCoords[2]) 
+	float[] targetCoords = IH_Util.GetClosestPointAtRadius(posX, posY, posZ, targetX, targetY, targetZ, radius)
+	ref.SetPosition(targetCoords[0], targetCoords[1], targetCoords[2])
+	; IH_Util.Trace("from ref: (" + posX + "," + posY + "," + posZ + "), toRef: (" + targetX + "," + targetY + "," + targetZ + "), radius: " + radius + "; output: (" + targetCoords[0] + "," + targetCoords[1] + "," + targetCoords[2] + ")")
 EndFunction
 
 bool Function WaitForPath(float timeout = 15.0)
@@ -595,4 +584,18 @@ Function Delete()
 	
 	GoToState("Deleted")
 	parent.Delete()
+EndFunction
+
+;/ =========================== \;
+; Deprecated function graveyard ;
+;\ =========================== /;
+
+; changed the function signature
+bool Function SetTargets(Actor c, ObjectReference t)
+	return SetTargets2(c, t, 1.0)
+EndFunction
+
+; moved to IH_Util because this function was pure math anyway
+float[] Function GetClosestPointAtRadius(float startX, float startY, float startZ, float targetX, float targetY, float targetZ, float radius, float distance = -1.0)
+	return IH_Util.GetClosestPointAtRadius(startX, startY, startZ, targetX, targetY, targetZ, radius, distance)
 EndFunction

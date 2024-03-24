@@ -3,6 +3,7 @@ Scriptname IH_PersistentDataScript extends Quest
 Actor Property PlayerRef Auto
 
 GlobalVariable Property IH_CritterCap Auto
+GlobalVariable Property IH_SetPlayerNotPushable Auto
 
 float Property cacheDecayRate = 5.0 Auto
 {The oldest entry in our ignore cache will be popped out once every <this many> seconds.
@@ -34,6 +35,9 @@ int standbyCritterCount = 0
 int standbyCritterCountGT = 0
 
 int activeCritterCount = 0
+
+int lastPushable = -1
+Race playerRace
 
 ObjectReference[] Property PackageTargets Auto
 bool[] PathingMarkerCheckout
@@ -219,6 +223,16 @@ IH_GetterCritterScript Function GetGetterCritter2(Actor caster, bool gt)
 		InsertStandbyCritter(toReturn)
 		return None
 	endif
+	
+	if (activeCritterCount == 1 && IH_SetPlayerNotPushable.GetValue() > 0.0)
+		playerRace = PlayerRef.GetRace()
+		lastPushable = playerRace.IsNotPushable() as int
+		if (lastPushable == 0)
+			IH_Util.Trace("Setting not pushable flag on player race " +playerRace)
+			playerRace.MakeNotPushable()
+		endif
+	endif
+	
 	return toReturn
 EndFunction
 
@@ -276,6 +290,14 @@ Function ReturnGetterCritter2(IH_GetterCritterScript c, bool gt)
 	elseif ((gt && !InsertStandbyCritterGT(c)) || (!gt && !InsertStandbyCritter(c)))
 		IH_Util.Trace("Failed to return this critter to GT standby cache " + c + ", it will be deleted instead.")
 		c.Delete()
+	endif
+	
+	if (activeCritterCount == 0 && lastPushable != -1)
+		if (lastPushable == 0)
+			IH_Util.Trace("Restoring pushable flag on " + playerRace)
+			PlayerRef.GetRace().MakePushable()
+		endif
+		lastPushable = -1
 	endif
 EndFunction
 
@@ -668,7 +690,7 @@ State Learning
 EndState
 
 Function CheckUpdates()
-	int versionCurrent = 010002 ; 01.00.02
+	int versionCurrent = 010003 ; 01.00.02
 	IH_Util.Trace("Checking for updates; last version: " + version + ", current version: " + versionCurrent)
 	if (version < versionCurrent)
 		if (version == 0)

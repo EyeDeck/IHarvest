@@ -5,6 +5,8 @@ GlobalVariable Property IH_CritterCap Auto
 GlobalVariable Property IH_NotificationSpam Auto
 GlobalVariable Property IH_InheritGreenThumb Auto
 GlobalVariable Property IH_LearnFood Auto
+GlobalVariable Property IH_SpawnDistanceMult Auto
+GlobalVariable Property IH_OffsetReturnPoint Auto
 
 IH_PersistentDataScript Property IH_PersistentData Auto
 
@@ -15,15 +17,27 @@ int OIDclear
 int OIDnspam
 int OIDgt
 int OIDfood
+int OIDspawnDist
+int OIDreturnOffset
 
 Event OnPageReset(string a_page)
 	if (a_page == "")
-		SetCursorFillMode(TOP_TO_BOTTOM)
 		AddHeaderOption("Getter Critters")
+		AddEmptyOption()
+		
 		float crittercap = IH_CritterCap.GetValue()
 		OIDcrittercap = AddSliderOption("Max Concurrent Critters", crittercap, "{0}")
+		
 		OIDrecall = AddTextOption("Recall Active Critters", "[ ]")
+		
+		float spawnDist = IH_SpawnDistanceMult.GetValue()
+		OIDspawnDist = AddSliderOption("Spawn Distance Multiplier", spawnDist, "{1}")
+		
 		OIDgt = AddToggleOption("Use Green Thumb", IH_InheritGreenThumb.GetValue() as bool)
+		SetCursorFillMode(TOP_TO_BOTTOM)
+		
+		float returnOffset = IH_OffsetReturnPoint.GetValue()
+		OIDreturnOffset = AddSliderOption("Critter Return Distance Offset", returnOffset, "{0}")
 		
 		AddEmptyOption()
 		
@@ -67,16 +81,32 @@ Event OnOptionSliderOpen(int a_option)
 		SetSliderDialogDefaultValue(64.0)
 		SetSliderDialogRange(1.0, 128.0)
 		SetSliderDialogInterval(1.0)
+	elseif (a_option == OIDspawnDist)
+		SetSliderDialogStartValue(IH_SpawnDistanceMult.GetValue())
+		SetSliderDialogDefaultValue(1.0)
+		SetSliderDialogRange(-3.0, 3.0)
+		SetSliderDialogInterval(0.1)
+	elseif (a_option == OIDreturnOffset)
+		SetSliderDialogStartValue(IH_OffsetReturnPoint.GetValue())
+		SetSliderDialogDefaultValue(0.0)
+		SetSliderDialogRange(0.0, 1000.0)
+		SetSliderDialogInterval(1.0)
 	endif
 EndEvent
 
 Event OnOptionSliderAccept(int a_option, float a_value)
 	if (a_option == OIDexp)
 		IH_CastExp.SetValue(a_value)
-		SetSliderOptionValue(OIDexp, a_value, "{2}")
+		SetSliderOptionValue(a_option, a_value, "{2}")
 	elseif (a_option == OIDcrittercap)
 		IH_CritterCap.SetValue(a_value)
-		SetSliderOptionValue(OIDcrittercap, a_value, "{0}")
+		SetSliderOptionValue(a_option, a_value, "{0}")
+	elseif (a_option == OIDspawnDist)
+		IH_SpawnDistanceMult.SetValue(a_value)
+		SetSliderOptionValue(a_option, a_value, "{1}")
+	elseif (a_option == OIDreturnOffset)
+		IH_OffsetReturnPoint.SetValue(a_value)
+		SetSliderOptionValue(a_option, a_value, "{0}")
 	endif
 EndEvent
 
@@ -94,6 +124,10 @@ Event OnOptionDefault(int a_option)
 	elseif (a_option == OIDfood)
 		IH_LearnFood.SetValue(0.0)
 		SetToggleOptionValue(a_option, false)
+	elseif (a_option == OIDspawnDist)
+		OnOptionSliderAccept(a_option, 1.0)
+	elseif (a_option == OIDreturnOffset)
+		OnOptionSliderAccept(a_option, 150.0)
 	endif
 EndEvent
 
@@ -112,6 +146,10 @@ Event OnOptionHighlight(int a_option)
 		SetInfoText("Toggles whether Getter Critters inherit the Green Thumb perk from from the caster, if they have it.\nYou may wish to disable this for balance reasons.")
 	elseif (a_option == OIDfood)
 		SetInfoText("Toggles whether the mod will also learn harvestables that produce food, instead of just ingredients.\nNOTE: Changes to this setting will not fully take effect until you also run Clear Flora Cache.")
+	elseif (a_option == OIDspawnDist)
+		SetInfoText("Multiplies the distance at which critters will (try to) spawn in front of the caster.\nNegative values will cause critters to spawn behind the caster instead.")
+	elseif (a_option == OIDreturnOffset)
+		SetInfoText("Values above zero will control how close critters will AI pathfind back to the caster before despawning.\nThis can help reduce the frequency of critters bumping into the caster, though AI pathfinding still tends to be unpredictable.\n64 units = 1 yard")
 	endif
 EndEvent
 

@@ -8,11 +8,10 @@ IH_PersistentDataScript Property IH_PersistentData Auto
 
 Perk Property GreenThumb Auto
 GlobalVariable Property IH_InheritGreenThumb Auto
+GlobalVariable Property IH_CastExp Auto
+GlobalVariable Property IH_SpawnDistanceMult Auto
 
 GlobalVariable Property IH_CurrentSearchRadius Auto
-
-GlobalVariable Property IH_CastExp Auto
-
 
 Actor caster
 
@@ -68,6 +67,9 @@ bool dualCasting = false
 
 bool hasGreenThumb = false
 
+float casterSpeedMult = 100.0
+bool casterIsRunning = false
+
 Event OnEffectStart(Actor akTarget, Actor akCaster)
 	DEBUG.OpenUserLog("IHarvest")
 ;	IH_Util.Trace("Cast effect starting")
@@ -80,6 +82,20 @@ Event OnEffectStart(Actor akTarget, Actor akCaster)
 	
 	if (IH_InheritGreenThumb.GetValue() > 0.0 && caster.HasPerk(GreenThumb))
 		hasGreenThumb = true
+	endif
+	
+	float distMult = IH_SpawnDistanceMult.GetValue()
+	if (distMult > 0.0)
+		; don't bother adjusting for move speed if the critters are set to spawn behind the player
+		casterSpeedMult = caster.GetActorValue("SpeedMult")
+		casterIsRunning = caster.IsRunning()
+		
+		if (self != None)
+			RegisterForAnimationEvent(caster, "tailCombatLocomotion")
+			RegisterForAnimationEvent(caster, "tailSneakLocomotion")
+			RegisterForAnimationEvent(caster, "tailCombatIdle")
+			RegisterForAnimationEvent(caster, "tailSneakIdle")
+		endif
 	endif
 	
 	int alt = caster.GetActorValue("Alteration") as int
@@ -102,6 +118,15 @@ Event OnEffectStart(Actor akTarget, Actor akCaster)
 	;~_Util.Trace("casting; delay:" + delay + " minDelay:" + minDelay + " accel:" + accel + " radius: " + radius + " maxRadius:" + maxRadius)
 	DoCast()
 ;	endif
+EndEvent
+
+; updates our casterIsRunning value via event, instead of constantly running delayed function calls on the caster (which is almost always the player)
+Event OnAnimationEvent(ObjectReference akSource, string asEventName)
+	if (asEventName == "tailCombatLocomotion" || asEventName == "tailSneakLocomotion")
+		casterIsRunning = true
+	else ; tailCombatIdle or tailSneakIdle
+		casterIsRunning = false
+	endif
 EndEvent
 
 ;bool allowReg = true
@@ -160,8 +185,21 @@ Function DoCast()
 	
 ;	IH_Util.Trace("Got critter " + getterCritter)
 	
+	; affects how quickly
+	float speed = 100.0
+	float distMult = IH_SpawnDistanceMult.GetValue()
+	if (distMult > 0.0 && casterIsRunning)
+		speed = casterSpeedMult * 2.0
+	endif
+	speed *= IH_SpawnDistanceMult.GetValue()
+	if (speed > 300.0)
+		speed = 300.0
+	elseif (speed < -300.0)
+		speed = -300.0
+	endif
+	
 	; set up the critter's state and start its thread asynchronously (it's autonomous after this point)
-	if (!getterCritter.SetTargets(caster, thing))
+	if (!getterCritter.SetTargets2(caster, thing, speed))
 		; don't let the critter leak in case it's in a state where it ignores SetTargets
 		IH_PersistentData.ReturnGetterCritter2(getterCritter, hasGreenThumb)
 	endif

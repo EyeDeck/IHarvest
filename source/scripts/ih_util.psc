@@ -94,6 +94,50 @@ float Function GetObjectDistance(float x1, float y1, float z1, float x2, float y
 	return Math.sqrt(x*x + y*y + z*z)
 EndFunction
 
+; cylindrical instead of spherical radius because I can't be bothered calculating a sphere
+float[] Function GetClosestPointAtRadius(float startX, float startY, float startZ, float targetX, float targetY, float targetZ, float radius, float distance = -1.0) Global
+	if (distance < 0.0)
+		distance = IH_Util.GetObjectDistance(startX, startY, startZ, targetX, targetY, targetZ)
+	endif
+	float[] out = new float[4]
+	
+	; can't just GetHeadingAngle, so we have to calc atan2 manually
+	float xDiff = targetX - startX
+	float yDiff = targetY - startY
+	float atan2 = 0.0
+	if (yDiff > 0.01 || yDiff < -0.01) ; checking == 0.0 still causes div by 0 errors sometimes
+		atan2 = xDiff*xDiff + yDiff*yDiff
+		if (atan2 > 0.01)
+			; same as above, without this check this line will produce div by 0 errors sometimes `\_@_/`
+			; this is despite Math.sqrt(0) not even being a mathematically invalid operation anyway
+			atan2 = Math.sqrt(atan2) - xDiff
+		else
+			atan2 -= xDiff
+		endif
+		
+		atan2 /= yDiff
+		atan2 = Math.atan(atan2) * 2
+	elseif (xDiff > 0.01 || xDiff < -0.01)
+		atan2 = Math.atan(yDiff / xDiff)
+		if (xDiff < 0.0)
+			atan2 += 180.0
+		endif
+	endif
+;	IH_Util.Trace("Calculated angle between (" + startX + "," + startY + ") and (" + targetX + "," + targetY + ") as " + atan2)
+	
+	float scale = radius / distance
+	
+	targetX -= (targetX - startX) * scale
+	targetY -= (targetY - startY) * scale
+	targetZ -= (targetZ - startZ) * scale
+	
+	out[0] = targetX
+	out[1] = targetY
+	out[2] = targetZ
+	out[3] = atan2
+	return out
+EndFunction
+
 Function Trace(string str) Global
 	DEBUG.TraceUser("IHarvest", str)
 EndFunction
