@@ -2,6 +2,8 @@ Scriptname IH_PersistentDataScript extends Quest
 
 Actor Property PlayerRef Auto
 
+IH_FloraLearnerControllerScript Property IH_FloraLearnerController Auto
+
 bool Property CanShowMismatchWarning = true Auto
 
 Message Property IH_SKSENotInstalled		Auto
@@ -11,6 +13,8 @@ Message Property IH_Update					Auto
 Message Property IH_UpdateUnsupported		Auto
 
 Message Property IH_StatsDisplay			Auto
+Message Property IH_OperationFinishedCache	Auto
+Message Property IH_OperationFinishedRecall	Auto
 
 GlobalVariable Property IH_CritterCap Auto
 GlobalVariable Property IH_SetPlayerNotPushable Auto
@@ -63,6 +67,8 @@ ObjectReference[] FoundFlora
 int finishedWorkers = 0
 int fruitfulWorkers = 0
 int cachedFlora = 0
+
+int SMFailureCount = 0
 
 bool busy = false
 
@@ -173,9 +179,18 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 	; pre-filled, who is then used in the GetDistance conditional when the Story Manager fills our FinderRefs. /;
 	if (!IH_SMKeyword.SendStoryEventAndWait(akRef1 = caster))
 		;~_Util.Trace("IH_SMKeyword.SendStoryEventAndWait(akRef1 = caster) failed. FoundFlora:" + FoundFlora)
+		SMFailureCount += 1
+		
+		if (SMFailureCount > 4)
+			IH_Util.Trace("Detected that IH_FloraFinder is probably stuck running - forcibly stopping quest.", 2)
+			IH_FloraFinder.Stop()
+		endif
+		
 		busy = false
 		return new ObjectReference[1]
 	endif
+	SMFailureCount = 0
+	
 ;	IH_Util.Trace("Sent story event...waiting for worker threads to finish.")
 	; now wait for our worker threads to fill in the data we want
 	int i = 0
@@ -212,7 +227,7 @@ IH_GetterCritterScript Function GetGetterCritter2(Actor caster, bool gt)
 			endif
 			bool result = RemoveStandbyCritterGT(toReturn)
 			if (!result)
-				IH_Util.Trace("Failed to remove this critter from GT standby cache " + toReturn)
+				IH_Util.Trace("Failed to remove this critter from GT standby cache " + toReturn, 2)
 				return None
 			endif
 		endif
@@ -226,14 +241,14 @@ IH_GetterCritterScript Function GetGetterCritter2(Actor caster, bool gt)
 			endif
 			bool result = RemoveStandbyCritter(toReturn)
 			if (!result)
-				IH_Util.Trace("Failed to remove this critter from standby cache " + toReturn)
+				IH_Util.Trace("Failed to remove this critter from standby cache " + toReturn, 2)
 				return None
 			endif
 		endif
 	endif
 	
 	if (!InsertActiveCritter(toReturn))
-		IH_Util.Trace("Failed to add this critter to active cache " + toReturn + ", it will be returned to standby instead.")
+		IH_Util.Trace("Failed to add this critter to active cache " + toReturn + ", it will be returned to standby instead.", 2)
 		InsertStandbyCritter(toReturn)
 		return None
 	endif
@@ -303,7 +318,7 @@ Function ReturnGetterCritter2(IH_GetterCritterScript c, bool gt)
 		endwhile
 		Debug.TraceStack(self + " printing ReturnGetterCritter stack trace")
 	elseif ((gt && !InsertStandbyCritterGT(c)) || (!gt && !InsertStandbyCritter(c)))
-		IH_Util.Trace("Failed to return this critter to GT standby cache " + c + ", it will be deleted instead.")
+		IH_Util.Trace("Failed to return this critter to GT standby cache " + c + ", it will be deleted instead.", 2)
 		c.Delete()
 	endif
 	
@@ -475,6 +490,10 @@ EndFunction
 
 Function ClearFloraCaches()
 	IH_Util.Trace("Clearing all known flora...")
+	float time = Utility.GetCurrentRealTime()
+	
+	IH_FloraLearnerController.VerifyState()
+	
 	IH_ExaminedTypes.Revert()
 	IH_LearnedTypes.Revert()
 	
@@ -483,12 +502,15 @@ Function ClearFloraCaches()
 		(self.GetAlias(i) as ReferenceAlias).Clear()
 		i += 1
 	endwhile
-	IH_Util.Trace("...Known flora cleared.")
+	
+	time = Utility.GetCurrentRealTime() - time
+	IH_Util.Trace("...Known flora cleared in " + time + "s.")
+	IH_OperationFinishedCache.Show(time)
 EndFunction
 
 ; Mostly for fixing my own save that I made a mess of while playtesting
 Function RecallAllCritters()
-	Debug.OpenUserLog("IHarvest")
+	float time = Utility.GetCurrentRealTime()
 	
 	IH_Util.Trace("Recalling all critters...\n\tActiveGetterCritters:")
 	PrintCritterArray(ActiveGetterCritters)
@@ -584,13 +606,16 @@ Function RecallAllCritters()
 	endwhile
 	
 	pathAliasCount = 64
-	PathingMarkerCheckout = new bool[64]
 	; /;
+	PathingMarkerCheckout = new bool[64]
 	
-	IH_Util.Trace("...Recall routine finished. Active#: " + activeCritterCount + ", Standby#: " + standbyCritterCount + ", Redumping arrays:\n\tActiveGetterCritters:")
+	time = Utility.GetCurrentRealTime() - time
+	IH_Util.Trace("...Recall routine finished in " + time + "s. Active#: " + activeCritterCount + ", Standby#: " + standbyCritterCount + ", Redumping arrays:\n\tActiveGetterCritters:")
 	PrintCritterArray(ActiveGetterCritters)
 	IH_Util.Trace("\n\tStandbyGetterCritters: ")
 	PrintCritterArray(StandbyGetterCritters)
+	
+	IH_OperationFinishedRecall.Show(time)
 	
 	;/ just testing some performance related stuff, because according to SMKViper:
 	;	There is a special case for the array find and rfind functions which are actually opcodes, and so do not have any of the overhead associated with function calls.
@@ -696,7 +721,9 @@ Function TallyCritterStats()
 EndFunction
 
 Function CheckUpdates()
-	int versionCurrent = 010008 ; 01.00.08
+	int versionCurrent = 010009 ; 01.00.09
+	
+	Form f
 	
 	Debug.Trace(self + " Checking if SKSE is installed (this may error)...")
 	IH_Util.Trace("Checking if SKSE is installed...")
@@ -704,12 +731,12 @@ Function CheckUpdates()
 	int seVS = SKSE.GetScriptVersionRelease()
 	if (seVR == 0)
 		if (seVS == 0)
-			IH_Util.Trace("SKSE appears not to be running.")
-			Debug.Trace(self + " SKSE not detected. A warning message will be shown, and this mod will not function.")
+			IH_Util.Trace("SKSE appears not to be running.", 2)
+			Debug.Trace(self + " SKSE not detected. A warning message will be shown, and this mod will not function.", 2)
 			IH_SKSENotInstalled.Show()
 		else
-			IH_Util.Trace("SKSE appears not to be running, however the SKSE scripts appear to be installed.")
-			Debug.Trace(self + " SKSE not detected, however SKSE scripts are installed. A warning message will be shown, and this mod will not function.")
+			IH_Util.Trace("SKSE appears not to be running, however the SKSE scripts appear to be installed.", 2)
+			Debug.Trace(self + " SKSE not detected, however SKSE scripts are installed. A warning message will be shown, and this mod will not function.", 2)
 			IH_SKSENotRunning.Show()
 		endif
 		return
@@ -719,7 +746,7 @@ Function CheckUpdates()
 		int seVB = SKSE.GetVersionBeta()
 		IH_Util.Trace("SKSE version " + seV + "." + seVM + "." + seVB + "." + seVR + ", script version " + seVS + " detected.")
 		if (seVR != seVS)
-			IH_Util.Trace("...SKSE script/release version mismatch detected. This mod may or may not function correctly.")
+			IH_Util.Trace("...SKSE script/release version mismatch detected. This mod may or may not function correctly.", 1)
 			if (CanShowMismatchWarning)
 				CanShowMismatchWarning = !(IH_SKSEMismatch.Show(seV, seVM, seVB, seVR, seVS) as bool)
 			endif
@@ -741,7 +768,18 @@ Function CheckUpdates()
 			if (version < 10007)
 				IH_Util.Trace("\tv1.0.7: Clearing flora cache so updated learner script can re-run")
 				ClearFloraCaches()
+			elseif (version < 10009)
+				f = Game.GetFormFromFile(0x6025B3, "BSAssets.esm")
+				if (f)
+					IH_ExaminedTypes.RemoveAddedForm(f)
+					f = Game.GetFormFromFile(0x6025B4, "BSAssets.esm")
+					IH_ExaminedTypes.RemoveAddedForm(f)
+					IH_Util.Trace("\tv1.0.9: Removed Beyond Skyrim Wisp Stalks from IH_ExaminedTypes")
+				else
+					Debug.Trace(self + " Ignore that error about GetFormFromFile")
+				endif
 			endif
+			
 		endif
 		
 		IH_Util.Trace("Finished updates. New version is: " + versionCurrent)

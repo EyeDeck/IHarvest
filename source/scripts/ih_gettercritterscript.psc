@@ -44,7 +44,7 @@ Event OnInit()
 EndEvent
 
 bool Function SetTargets2(Actor c, ObjectReference t, float speed)
-	IH_Util.Trace(self + " SetTargets called in wrong state " + GetState() + "; ignoring call and dumping stack trace.")
+	IH_Util.Trace(self + " SetTargets called in wrong state " + GetState() + "; ignoring call and dumping stack trace.", 2)
 	Debug.TraceStack(self + " printing SetTargets stack trace")
 	return false
 EndFunction
@@ -72,7 +72,7 @@ State Init
 			i += 1
 		endWhile
 		if (i == 25)
-			IH_Util.Trace("\t" + self + " 3D never loaded after 25 checks; abandoning spawn attempt and cleaning up")
+			IH_Util.Trace("\t" + self + " 3D never loaded after 25 checks; abandoning spawn attempt and cleaning up", 2)
 			Cleanup()
 			return
 		endif
@@ -140,16 +140,17 @@ State Init
 		CurrentPathTarget = Target
 		
 		if (pathingMarkerID >= 0)
-			; not sure if I need this, but I've noticed that my cache will very slowly corrupt over time for some reason from
-			; checked out aliases never getting checked back in, 
+			; on rare occasions, this script fails to check markers back in properly for some reason,
+			; so make sure our marker ID gets put back before we check out a new one, otherwise
+			; the tracker array slowly gets corrupted and this will eventually stop working right
+			IH_Util.Trace("\t" + self + " wtf? pathingMarkerID >= 0 before checking out path marker; returned old marker to cache.", 1)
 			IH_PersistentData.ReturnPathingAlias(pathingMarkerID)
-			IH_Util.Trace("\t" + self + " wtf? pathingMarkerID >= 0 before checking out path marker; returned old marker to cache.")
 		endif
 		
 		;PathToReference(Target, 1.0) bad bad bad never use this function (see CheckoutPathingAlias() in IH_PersistentDataScript)
 		pathingMarkerID = IH_PersistentData.CheckoutPathingAlias()
 		if (pathingMarkerID < 0)
-			IH_Util.Trace("\t" + self + " Failed to checkout pathing marker; falling back to translates.")
+			IH_Util.Trace("\t" + self + " Failed to checkout pathing marker; falling back to translates.", 1)
 			
 			CheckAndPlayDrainVFX()
 		else
@@ -602,7 +603,7 @@ Function Cleanup()
 	if (active)
 		IH_PersistentData.ReturnGetterCritter2(self, HasGreenThumb)
 	else
-		IH_Util.Trace(self + " Skipped return to cache becasue \"active\" is false, which would likely have caused cache confusion.")
+		IH_Util.Trace(self + " Skipped return to cache becasue \"active\" is false, which would likely have caused cache confusion.", 1)
 	endif
 	
 	active = false

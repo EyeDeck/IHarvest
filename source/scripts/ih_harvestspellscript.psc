@@ -13,7 +13,7 @@ GlobalVariable Property IH_CastExp Auto
 GlobalVariable Property IH_SpawnDistanceMult Auto
 
 GlobalVariable Property IH_CurrentSearchRadius Auto
-GlobalVariable Property IH_LearnerRunning Auto
+; GlobalVariable Property IH_LearnerRunning Auto ; v1.0.9: deprecated, hasn't been useful since v1.0.4
 
 Actor caster
 
@@ -176,7 +176,7 @@ Function DoCast()
 ;	IH_Util.Trace("Getting critter")
 	IH_GetterCritterScript getterCritter = IH_PersistentData.GetGetterCritter2(caster, hasGreenThumb)
 	if (getterCritter == None)
-		IH_Util.Trace("\tFailed to get a critter from IH_PersistentData (most likely at concurrency cap); aborting cast.")
+		IH_Util.Trace("\tFailed to get a critter from IH_PersistentData (most likely at concurrency cap); aborting cast.", 1)
 		slowMode += 3
 		return
 	endif
@@ -237,12 +237,7 @@ ObjectReference Function GetHarvestable()
 	
 	if (cachedFloraCount == 0)
 		;~_Util.Trace("GetHarvestable() could not find any flora; running learning routine and returning None")
-		
-		; IH_FloraLearnerController might have a queue, so we check a global variable 
-		; instead of interacting with the script directly to avoid getting stuck in that
-		if (IH_LearnerRunning.GetValue() == 0.0)
-			IH_FloraLearnerController.Run()
-		endif
+		IH_FloraLearnerController.Run()
 		return None
 	endif
 	cachedFloraCount -= 1
