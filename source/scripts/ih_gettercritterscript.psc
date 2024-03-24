@@ -72,7 +72,7 @@ State Init
 			i += 1
 		endWhile
 		if (i == 25)
-			IH_Util.Trace("\t" + self + " 3D never loaded after 25 checks; abandoning spawn attempt and cleaing up")
+			IH_Util.Trace("\t" + self + " 3D never loaded after 25 checks; abandoning spawn attempt and cleaning up")
 			Cleanup()
 			return
 		endif

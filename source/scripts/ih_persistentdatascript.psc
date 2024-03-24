@@ -102,7 +102,7 @@ Event OnUpdate()
 		RegisterForSingleUpdate(cacheDecayRate)
 	endif
 	
-	(self.GetNthAlias(thisIndex) as ReferenceAlias).Clear()
+	(self.GetAlias(thisIndex) as ReferenceAlias).Clear()
 	;~_Util.Trace("IGN: Cleared ignored object from cache ID " + thisIndex)
 EndEvent
 
@@ -123,7 +123,7 @@ Function AddIgnoredObject(ObjectReference thing)
 		endif
 	endif
 	
-	(self.GetNthAlias(thisIndex) as ReferenceAlias).ForceRefTo(thing)
+	(self.GetAlias(thisIndex) as ReferenceAlias).ForceRefTo(thing)
 	;~_Util.Trace("IGN: Forced object " + thing + " into ignored alias ID " + thisIndex)
 	RegisterForSingleUpdate(cacheDecayRate)
 EndFunction
@@ -453,7 +453,7 @@ ObjectReference Function GetPathingMarker(int id)
 EndFunction
 
 ReferenceAlias Function GetPathingAlias(int id)
-	return (self.getNthAlias(cacheSize + id) as ReferenceAlias)
+	return (self.GetAlias(cacheSize + id) as ReferenceAlias)
 EndFunction
 
 Function ReturnPathingAlias(int id);, ReferenceAlias a = None)
@@ -461,7 +461,7 @@ Function ReturnPathingAlias(int id);, ReferenceAlias a = None)
 ;/	if (a)
 		a.Clear()
 	else
-		(self.getNthAlias(cacheSize + id) as ReferenceAlias).Clear()
+		(self.GetAlias(cacheSize + id) as ReferenceAlias).Clear()
 	endif/;
 	PathingMarkerCheckout[id] = false
 EndFunction
@@ -473,7 +473,7 @@ Function ClearFloraCaches()
 	
 	int i = 0
 	while (i < cacheSize)
-		(self.GetNthAlias(i) as ReferenceAlias).Clear()
+		(self.GetAlias(i) as ReferenceAlias).Clear()
 		i += 1
 	endwhile
 	IH_Util.Trace("...Known flora cleared.")
@@ -682,7 +682,7 @@ Function TallyCritterStats()
 EndFunction
 
 Function CheckUpdates()
-	int versionCurrent = 010006 ; 01.00.06
+	int versionCurrent = 010007 ; 01.00.06
 	
 	Debug.Trace(self + " Checking if SKSE is installed (this may error)...")
 	IH_Util.Trace("Checking if SKSE is installed...")
@@ -717,10 +717,19 @@ Function CheckUpdates()
 		IH_Util.Trace("No update this load.")
 	elseif (versionCurrent > version)
 		if (version == 0)
+			; update code to apply on first run
+			
 			; always fires on first run because I forgot to put a version var in v1.0.0
 			IH_Util.Trace("\tv1.0.1: Initializing StandbyGetterCrittersGT array")
 			StandbyGetterCrittersGT = new IH_GetterCritterScript[128]
+		else
+			; update code NOT to apply on first run
+			if (version < 10007)
+				IH_Util.Trace("\tv1.0.7: Clearing flora cache so updated learner script can re-run")
+				ClearFloraCaches()
+			endif
 		endif
+		
 		IH_Util.Trace("Finished updates. New version is: " + versionCurrent)
 		if (version != 0) ; don't show on initial install
 			IH_Update.Show(version / 10000.0, versionCurrent / 10000.0)

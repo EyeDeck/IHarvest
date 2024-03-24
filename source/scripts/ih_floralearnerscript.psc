@@ -27,6 +27,9 @@ Function DoThing()
 	endif
 	
 	Form base = this.GetBaseObject()
+	; IH_Util.Trace("\tLearner: IH_ExaminedTypes.HasForm(" + base + "): " + IH_ExaminedTypes.HasForm(base))
+	; this frequently comes back true, not sure why because the condition functions for filling the alias
+	; ought to prevent that... doesn't break anything I guess, but does annoy me.
 	IH_ExaminedTypes.AddForm(base)
 	
 	;IH_Util.Trace("Learner thread examining ref " + this + "/base " + base + "...")
@@ -84,6 +87,7 @@ Function DoThing()
 			endif
 			return
 		endif
+		
 		FXfakeCritterScript thisFakeCritter = this as FXfakeCritterScript
 		if (thisFakeCritter != None)
 			if ((thisFakeCritter.numberOfIngredientsOnCatch > 0 && thisFakeCritter.myIngredient) || (learnFood && thisFakeCritter.myFood))
@@ -94,7 +98,20 @@ Function DoThing()
 			endif
 			return
 		endif
-		if (this as NirnrootACTIVATORScript || this as USKP_NirnrootACTIVATORScript) ; unofficial patch adds an additional nirnroot script, used at Sarethi Farm
+		
+		DLC1TrapPoisonBloom thisPB = this as DLC1TrapPoisonBloom
+		if (thisPB != None)
+			if (thisPB.myIngredient != None || IH_Util.ProducesIngredient(thisPB.myMiscObject, learnFood) || IH_Util.ProducesIngredient(thisPB.myPotion, learnFood))
+				IH_LearnedTypes.AddForm(base)
+				IH_Util.Trace("\tLearner: Learned DLC1TrapPoisonBloom " + this + "/" + base)
+			else
+				IH_Util.Trace("\tLearner: Ignoring ingredientless DLC1TrapPoisonBloom " + this + "/" + base)
+			endif
+			return
+		endif
+		
+		if (this as NirnrootACTIVATORScript || this as USKP_NirnrootACTIVATORScript )
+			; unofficial patch adds an additional nirnroot script, used at Sarethi Farm
 			IH_LearnedTypes.AddForm(base)
 			IH_Util.Trace("\tLearner: Learned NirnrootACTIVATORScript " + this + "/" + base)
 			return
