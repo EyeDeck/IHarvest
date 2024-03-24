@@ -241,6 +241,9 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 		; Filter disabled refs
 		refs = skypal_references.Filter_Enabled(refs, "")
 		
+		; Filter deleted refs
+		refs = skypal_references.Filter_Deleted(refs, "!")
+		
 		; Filter for refs within IH_CurrentSearchRadius units of caster
 		refs = skypal_references.Filter_Distance(refs, IH_CurrentSearchRadius.GetValue(), caster, "<")
 		
