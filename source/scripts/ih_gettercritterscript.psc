@@ -402,6 +402,28 @@ Function SpawnMeasurementMarker()
 	endif
 EndFunction
 
+Function MoveToClosestRadius(ObjectReference ref, ObjectReference tgt, float radius, float skipRadius)
+	if (ref.GetDistance(tgt) < skipRadius)
+		return
+	endif
+	float posX = ref.GetPositionX() ; not to be confused with POSIX
+	float posY = ref.GetPositionY()
+	float posZ = ref.GetPositionZ()
+	
+	; It's generally a bad idea to constantly poll an actor's position, especially the player, because it'll lead to
+	; lock issues with other threads—however, we do still need to measure our target's coordinates frequently.
+	; So, if we create a ref that we just move to the target and measure from that, we can get the same coordinates,
+	; just faster because no other thread will be trying to interact with it too.
+	MeasurementMarker.MoveTo(tgt)
+	float targetX = MeasurementMarker.GetPositionX()
+	float targetY = MeasurementMarker.GetPositionY()
+	float targetZ = MeasurementMarker.GetPositionZ()
+	
+	float[] targetCoords = IH_Util.GetClosestPointAtRadius(posX, posY, posZ, targetX, targetY, targetZ, radius)
+	ref.SetPosition(targetCoords[0], targetCoords[1], targetCoords[2])
+	; IH_Util.Trace("from ref: (" + posX + "," + posY + "," + posZ + "), toRef: (" + targetX + "," + targetY + "," + targetZ + "), radius: " + radius + "; output: (" + targetCoords[0] + "," + targetCoords[1] + "," + targetCoords[2] + ")")
+EndFunction
+
 ;/ This nifty function could pretty easily be adapted into a generic one that works on anything,
 ; but having it run "first person" with self calls is way faster than external calls on the object being moved /;
 Function TranslateWithinRadius(ObjectReference tgt, float zOffset, float radius, float skipRadius, float speed, bool faceTargetFirst = false, int recursionDepth = -1, float recurseSpeedMult = 1.0)
@@ -484,56 +506,56 @@ bool Function SplineTranslateToLatent(float targetX, float targetY, float target
 	SplineTranslateTo(targetX, targetY, targetZ, angleX, angleY, angleZ, tangent, speed, 0.0)
 	
 	float starttime = Utility.GetCurrentRealTime()
+	float lasttime = starttime
+	float thistime = starttime
 	int i = 0
 	while (waitForTranslation)
-		Utility.Wait(0.005) ; min wait time is 1 frame
+		Utility.Wait(0.02) ; min wait time is 1 frame
+		
 		if (i % 20 == 0)
-			if (Utility.GetCurrentRealTime() >= starttime + 15.0)
+			thistime = Utility.GetCurrentRealTime()
+			if (thistime < lasttime)
+				; cover the case where the game is restarted during this loop
+				IH_Util.Trace(self + " Time ran backwards! Correcting for temporal anomaly.")
+				starttime += thistime - lasttime
+			endif
+			
+			if (thistime >= starttime + 15.0 || !Is3DLoaded())
 				return false
 			endif
+			lasttime = thistime
 		endif
+		
 		i += 1
 	endwhile
 	return true
 EndFunction
 
-Function MoveToClosestRadius(ObjectReference ref, ObjectReference tgt, float radius, float skipRadius)
-	if (ref.GetDistance(tgt) < skipRadius)
-		return
-	endif
-	float posX = ref.GetPositionX() ; not to be confused with POSIX
-	float posY = ref.GetPositionY()
-	float posZ = ref.GetPositionZ()
-	
-	; It's generally a bad idea to constantly poll an actor's position, especially the player, because it'll lead to
-	; lock issues with other threads—however, we do still need to measure our target's coordinates frequently.
-	; So, if we create a ref that we just move to the target and measure from that, we can get the same coordinates,
-	; just faster because no other thread will be trying to interact with it too.
-	MeasurementMarker.MoveTo(tgt)
-	float targetX = MeasurementMarker.GetPositionX()
-	float targetY = MeasurementMarker.GetPositionY()
-	float targetZ = MeasurementMarker.GetPositionZ()
-	
-	float[] targetCoords = IH_Util.GetClosestPointAtRadius(posX, posY, posZ, targetX, targetY, targetZ, radius)
-	ref.SetPosition(targetCoords[0], targetCoords[1], targetCoords[2])
-	; IH_Util.Trace("from ref: (" + posX + "," + posY + "," + posZ + "), toRef: (" + targetX + "," + targetY + "," + targetZ + "), radius: " + radius + "; output: (" + targetCoords[0] + "," + targetCoords[1] + "," + targetCoords[2] + ")")
-EndFunction
-
 bool Function WaitForPath(float timeout = 15.0)
 	waitForPathing = true
+	
 	float starttime = Utility.GetCurrentRealTime()
+	float lasttime = starttime
+	float thistime = starttime
+	
 	int i = 0
 	while (waitForPathing)
-;		IH_Util.Trace(self + " ...waiting for pathing...")
-		if (!Is3dLoaded())
-			StopPathing()
-			return false
-		endif
-		Utility.Wait(0.1)
+		Utility.Wait(0.02)
 		
-		if (i % 20 == 0 && Utility.GetCurrentRealTime() >= starttime + timeout)
-			StopPathing()
-			return false
+		if (i % 20 == 0)
+			thistime = Utility.GetCurrentRealTime()
+			if (thistime < lasttime)
+				; cover the case where the game is restarted during this loop
+				IH_Util.Trace(self + " Time ran backwards! Correcting for temporal anomaly.")
+				starttime += thistime - lasttime
+			endif
+			
+			if (thistime >= starttime + timeout || !Is3dLoaded())
+				StopPathing()
+				return false
+			endif
+			
+			lasttime = thistime
 		endif
 		i += 1
 	endwhile
@@ -559,6 +581,10 @@ Function Cleanup()
 	Target = None
 	CurrentPathTarget = None
 	CurrentPathAlias = None
+	
+	; kill any looping threads waiting for latent functions
+	waitForTranslation = false
+	waitForPathing = false
 	
 	if (pathingMarkerID >= 0)
 		int toReturn = pathingMarkerID

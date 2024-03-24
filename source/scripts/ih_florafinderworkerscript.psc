@@ -10,15 +10,21 @@ Event OnInit()
 	ObjectReference this = GetReference()
 	
 	if (this == None)
-		;IH_Util.Trace(self + " GetReference() is null.")
+	;	IH_Util.Trace("\t" + self + " GetReference() is null.")
 		UpdateOwner(None, 1)
 		return
 	endif
 	Form base = this.GetBaseObject()
 	
+	; IH_Util.Trace("\t" + self + " filled with ref " + this + ", base " + base)
+	
 	; test if activation is blocked (this is probably almost never an issue,
 	; but hey this code is all multithreaded anyway so there's no harm in checking)
-	if (this.IsActivationBlocked())
+	if (base as Activator)
+		; v1.0.8: Ignore this setting for activators, because blocking activation on an activator
+		; does almost nothing anyway, and it prevents poison blooms from being harvested unless
+		; the unofficial patch version of DLC1TrapPoisonBloom is installed
+	elseif (this.IsActivationBlocked())
 		UpdateOwner(this,2)
 		return
 	endif

@@ -134,10 +134,17 @@ EndFunction
 ; it doesn't really matter where these are stored so I decided to just move them to another existing quest
 -----------/;
 Function FloraFinderUpdate(ObjectReference thing, int err)
-	if (!err)
-;		IH_Util.Trace("\tGot our callback with " + thing + ", added to cache " + fruitfulWorkers)
+	; IH_Util.Trace("\tGot our callback with " + thing + ", err: " + err)
+	if (err == 1)
+		; most common parameter, do nothing
+	elseif (err == 0)
+	;	IH_Util.Trace("\tGot our callback with " + thing + ", added to cache " + fruitfulWorkers)
 		FoundFlora[fruitfulWorkers] = thing
 		fruitfulWorkers += 1
+	else
+		; v1.0.8: put script-filtered objects in the ignore list, so we don't waste time
+		; retrying them over and over (oops...)
+		AddIgnoredObject(thing)
 	endif
 	finishedWorkers += 1
 EndFunction
@@ -488,8 +495,6 @@ Function RecallAllCritters()
 	IH_Util.Trace("\n\tStandbyGetterCritters: ")
 	PrintCritterArray(StandbyGetterCritters)
 	
-	activeCritterCount = 0
-	
 	int i = 0
 	while (i < ActiveGetterCritters.Length)
 		IH_GetterCritterScript c = ActiveGetterCritters[i]
@@ -497,8 +502,16 @@ Function RecallAllCritters()
 			IH_Util.Trace("\tRecalling critter " + c + " in state: " + ActiveGetterCritters[i].GetState())
 			ActiveGetterCritters[i].Cleanup()
 		endif
+		; recheck that the cleanup function did actually do its job, if not forcibly fix cache
+		c = ActiveGetterCritters[i]
+		if (c != None)
+			IH_Util.Trace("\t\t..." + c + " still in cache after recall, forcibly fixing and continuing.")
+			ReturnGetterCritter2(c, c.HasGreenThumb)
+		endif
 		i += 1
 	endwhile
+	
+	activeCritterCount = 0
 	
 	IH_Util.Trace("...Critters recalled, redumping...\n\tActiveGetterCritters:")
 	PrintCritterArray(ActiveGetterCritters)
@@ -521,6 +534,7 @@ Function RecallAllCritters()
 					IH_Util.Trace("\tDeduped ActiveGetterCritters index " + i + "/" + j)
 					ActiveGetterCritters[i] = None
 				endif
+				j -= 1
 			endwhile
 		endif
 		
@@ -682,7 +696,7 @@ Function TallyCritterStats()
 EndFunction
 
 Function CheckUpdates()
-	int versionCurrent = 010007 ; 01.00.06
+	int versionCurrent = 010008 ; 01.00.08
 	
 	Debug.Trace(self + " Checking if SKSE is installed (this may error)...")
 	IH_Util.Trace("Checking if SKSE is installed...")
