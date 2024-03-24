@@ -102,7 +102,7 @@ bool busy = false
 int Property version Auto
 
 int Function GetVersion()
-	return 010203 ; 01.02.03
+	return 010204 ; 01.02.04
 EndFunction
 
 Event OnInit()
@@ -442,7 +442,7 @@ IH_GetterCritterScript Function GetGetterCritter2(Actor caster, bool gt)
 	else
 		if (standbyCritterCount == 0)
 			toReturn = caster.PlaceAtMe(IH_GetterCritter, 1, true, true) as IH_GetterCritterScript
-			toReturn.SetPlayerTeammate(true) ; 1.2.2: removed this in favor of the superior SkyPal solution
+			; toReturn.SetPlayerTeammate(true) ; 1.2.2: removed this in favor of the superior SkyPal solution
 		else
 			toReturn = GetFirstStandbyCritter()
 			if (!toReturn)
@@ -1078,18 +1078,14 @@ Function CheckUpdates()
 			
 			if (version < 10102)
 				v10102_UpdateHFSetting(true)
-			;	v10102_SetCrittersTeammate()
 			endif
 			
 			if (version < 10201)
 				v10200_SetDefaultSearchMode()
 			endif
 			
-			if (version < 10202)
+			if (version < 10204)
 				v10202_UnsetCrittersTeammate()
-			endif
-			
-			if (version < 10203)
 				ResyncPointerHolders()
 			endif
 		endif
@@ -1126,10 +1122,8 @@ Function v10102_UpdateHFSetting(bool allowReset = false)
 	endif
 EndFunction
 
-;Function v10102_SetCrittersTeammate()
 Function v10202_UnsetCrittersTeammate()
-	;IH_Util.Trace("\tv1.1.2: Gathering up all the getter critters...")
-	IH_Util.Trace("\tv1.2.2: Gathering up all the getter critters...")
+	IH_Util.Trace("\tv1.2.4: Gathering up all the getter critters...")
 	Form[] allCritters = Utility.CreateFormArray(512, None)
 	int i = 0
 	int last = 0
@@ -1161,8 +1155,7 @@ Function v10202_UnsetCrittersTeammate()
 	while (i < last)
 		c = (allCritters[i] as IH_GetterCritterScript)
 		if (c != None)
-			; c.SetPlayerTeammate(false) ; does this in the next function
-			c.MigrateFame()
+			c.MigrateFame() ; also calls SetPlayerTeammate(false)
 		endif
 		i += 1
 	endwhile
