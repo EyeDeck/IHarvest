@@ -86,13 +86,7 @@ bool Function ProducesIngredientInternal(Form f, bool food, bool hf, Form[] seen
 		endwhile
 		return false
 	endif
-	;/ https://afktrack.afkmods.com/index.php?a=issues&i=27196
-	; I almost included handling for BYOHHiddenObjectScript, but after looking more closely at the implementation,
-	; I decided that it was such a trainwreck that I would rather fix the implementation than add a nasty workaround
-	; in my script. Whether or not USSEP merges my changes, I will include an optional "vanilla fixes" file along
-	; with the mod, which will be required for full Hearthfire support.
-;	BYOHHiddenObjectScript = f as BYOHHiddenObjectScript
-	/;
+	
 	return false
 EndFunction
 
@@ -144,7 +138,7 @@ float[] Function GetClosestPointAtRadius(float startX, float startY, float start
 		endif
 		
 		atan2 /= yDiff
-		atan2 = Math.atan(atan2) * 2
+		atan2 = Math.atan(atan2) * 2.0
 	elseif (xDiff > 0.01 || xDiff < -0.01)
 		atan2 = Math.atan(yDiff / xDiff)
 		if (xDiff < 0.0)

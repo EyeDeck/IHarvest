@@ -65,7 +65,16 @@ State Init
 		float angle = Caster.GetAngleZ()
 		; float zOffset = 128 / Math.tan(Caster.GetAngleX())
 		;;~ebug.TraceUser("IHarvest", zOffset)
+		
+		; if (isVR)
+		; 	MeasurementMarker.MoveTo(Caster)
+		; 	MoveTo(Caster, \
+		; 	controllerX - MeasurementMarker.GetPositionX() + 192.0 * casterSpeedMult * Math.sin(controllerHeading), \
+		; 	controllerY - MeasurementMarker.GetPositionY() + 192.0 * casterSpeedMult * Math.cos(controllerHeading), 0.0, true)
+		; else
 		MoveTo(Caster, 192.0 * casterSpeedMult * Math.sin(angle), 192.0 * casterSpeedMult * Math.cos(angle), 0.0, true)
+		; endif
+				
 		; SetPosition(Caster.GetPositionX() + 128.0 * Math.sin(angle), Caster.GetPositionY() + 128.0 * Math.cos(angle), Caster.GetPositionZ() + zOffset)
 		; MoveTo totally ignores the zOffset argument apparently, and SetPosition does insane things *shrug*
 		

@@ -78,7 +78,7 @@ bool busy = false
 int Property version Auto
 
 int Function GetVersion()
-	return 010102 ; 01.01.02
+	return 010103 ; 01.01.02
 EndFunction
 
 Event OnInit()
