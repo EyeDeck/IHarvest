@@ -5,11 +5,14 @@ Actor Property PlayerRef Auto
 Keyword Property IH_SMKeyword Auto
 ; IH_FloraFinderScript Property IH_FloraFinder Auto
 IH_PersistentDataScript Property IH_PersistentData Auto
+
 Perk Property GreenThumb Auto
+GlobalVariable Property IH_InheritGreenThumb Auto
 
 GlobalVariable Property IH_CurrentSearchRadius Auto
 
 GlobalVariable Property IH_CastExp Auto
+
 
 Actor caster
 
@@ -75,7 +78,7 @@ Event OnEffectStart(Actor akTarget, Actor akCaster)
 		dualCasting = true
 	endif
 	
-	if (caster.HasPerk(GreenThumb))
+	if (IH_InheritGreenThumb.GetValue() > 0.0 && caster.HasPerk(GreenThumb))
 		hasGreenThumb = true
 	endif
 	

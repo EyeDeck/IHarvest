@@ -9,6 +9,8 @@ Scriptname IH_FloraLearnerScript extends ReferenceAlias
 FormList Property IH_ExaminedTypes Auto
 FormList Property IH_LearnedTypes Auto
 
+GlobalVariable Property IH_LearnFood Auto
+
 Event OnInit()
 	DoThing()
 	Clear()
@@ -17,11 +19,7 @@ EndEvent
 Function DoThing()
 	ObjectReference this = GetReference()
 	if (this == None)
-		;~_Util.Trace("Learner thread found nothing ");+ retries)
-		;/if (retries < 3)
-			Utility.Wait(0.01)
-			DoThing(retries + 1)
-		endif/;
+		;~_Util.Trace("Learner thread found nothing")
 		return
 	endif
 	
@@ -37,11 +35,20 @@ Function DoThing()
 		return
 	endif
 	
+	bool learnFood = IH_LearnFood.GetValue() > 0.0
+	if (learnFood)
+		Potion thisPotion = base as Potion
+		if (thisPotion && thisPotion.IsFood())
+			IH_LearnedTypes.AddForm(base)
+			IH_Util.Trace("\tLearner: Learned loose food " + this + "/" + base)
+		endif
+	endif
+	
 	TreeObject thisTree = base as TreeObject
 	if (thisTree != None)
 		; Most harvestable things are trees instead of flora, I have no idea why this is
 		ingr = thisTree.GetIngredient()
-		if (ingr != None && IH_Util.ProducesIngredient(ingr))
+		if (ingr != None && IH_Util.ProducesIngredient(ingr, learnFood))
 			IH_LearnedTypes.AddForm(base)
 			IH_Util.Trace("\tLearner: Learned TreeObject " + this + "/" + base)
 		else
@@ -52,7 +59,7 @@ Function DoThing()
 	Flora thisFlora = base as Flora
 	if (thisFlora != None)
 		ingr = thisFlora.GetIngredient()
-		if (ingr != None && IH_Util.ProducesIngredient(ingr))
+		if (ingr != None && IH_Util.ProducesIngredient(ingr, learnFood))
 			IH_LearnedTypes.AddForm(base)
 			IH_Util.Trace("\tLearner: Learned Flora " + this + "/" + base)
 		else
@@ -61,12 +68,13 @@ Function DoThing()
 		return
 	endif
 	
+	
 	; Here's where mod compatibility code would have to go to add additional non-vanilla scripts
 	Activator thisActivator = base as Activator
 	if (thisActivator != None)
 		Critter thisCritter = this as Critter
 		if (thisCritter != None)
-			if (thisCritter.lootableCount > 0 && (thisCritter.lootable || IH_Util.ProducesIngredient(thisCritter.nonIngredientLootable)))
+			if (thisCritter.lootableCount > 0 && (thisCritter.lootable || IH_Util.ProducesIngredient(thisCritter.nonIngredientLootable, learnFood)))
 				IH_LearnedTypes.AddForm(base)
 				IH_Util.Trace("\tLearner: Learned Critter " + this + "/" + base)
 			else
@@ -76,7 +84,7 @@ Function DoThing()
 		endif
 		FXfakeCritterScript thisFakeCritter = this as FXfakeCritterScript
 		if (thisFakeCritter != None)
-			if (thisFakeCritter.numberOfIngredientsOnCatch > 0 && thisFakeCritter.myIngredient)
+			if ((thisFakeCritter.numberOfIngredientsOnCatch > 0 && thisFakeCritter.myIngredient) || (learnFood && thisFakeCritter.myFood))
 				IH_LearnedTypes.AddForm(base)
 				IH_Util.Trace("\tLearner: Learned FXfakeCritterScript " + this + "/" + base)
 			else
@@ -84,11 +92,11 @@ Function DoThing()
 			endif
 			return
 		endif
-		if (this as NirnrootACTIVATORScript || this as USKP_NirnrootACTIVATORScript)
+		if (this as NirnrootACTIVATORScript || this as USKP_NirnrootACTIVATORScript) ; unofficial patch adds an additional nirnroot script, used at Sarethi Farm
 			IH_LearnedTypes.AddForm(base)
 			IH_Util.Trace("\tLearner: Learned NirnrootACTIVATORScript " + this + "/" + base)
 			return
-		endif			
+		endif
 		
 		IH_Util.Trace("\tLearner: Ignoring activator of unknown type " + this + "/" + base)
 	endif

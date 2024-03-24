@@ -2,23 +2,31 @@ ScriptName IH_Util
 
 ;/ Recursive function that takes a form (Ingredient, FormList or LeveledItem),
 ; and determines whether that form can produce alchemy ingredients /;
-bool Function ProducesIngredient(Form f) Global
+bool Function ProducesIngredient(Form f, bool food) Global
 	Form[] seen = new Form[128]
-	return ProducesIngredientInternal(f, seen, 0)
+	return ProducesIngredientInternal(f, food, seen, 0)
 EndFunction
 
 ;/ Realized I had to add an infinite recursion check, otherwise Bad Things could happen;
 ; best way to do that was to make the original function into a proxy /;
-bool Function ProducesIngredientInternal(Form f, Form[] seen, int seenEnd) Global
+bool Function ProducesIngredientInternal(Form f, bool food, Form[] seen, int seenEnd) Global
 	IH_Util.Trace("Examining Form " + f)
 	if (seen.RFind(f, seenEnd) >= 0)
-		DEBUG.Trace("Skipped a circular FormList/LeveledItem " + f + " in ProducesIngredient() - you may want to investigate this as this may cause crashes elsewhere.")
+		DEBUG.Trace("IHarvest: Skipped a circular FormList/LeveledItem " + f + " in ProducesIngredient() - you may want to investigate this as this may cause crashes elsewhere!", 1)
 		return false
 	endif
 	
 	if (f as Ingredient)
 		return true
 	endif
+	
+	if (food)
+		Potion fP = f as Potion
+		if (fP && fP.IsFood())
+			return true
+		endif
+	endif
+	
 	LeveledItem fLI = f as LeveledItem
 	if (fLI != None)
 		seen[seenEnd] = f
@@ -31,7 +39,7 @@ bool Function ProducesIngredientInternal(Form f, Form[] seen, int seenEnd) Globa
 		int ct = fLI.GetNumForms()
 		int i = 0
 		while (i < ct)
-			if (fLI.GetNthCount(i) > 0 && ProducesIngredientInternal(fLI.GetNthForm(i), seen, seenEnd))
+			if (fLI.GetNthCount(i) > 0 && ProducesIngredientInternal(fLI.GetNthForm(i), food, seen, seenEnd))
 				return true
 			endif
 			i += 1
@@ -46,7 +54,7 @@ bool Function ProducesIngredientInternal(Form f, Form[] seen, int seenEnd) Globa
 		int ct = fFL.GetSize()
 		int i = 0
 		while (i < ct)
-			if (ProducesIngredientInternal(fFL.GetAt(i), seen, seenEnd))
+			if (ProducesIngredientInternal(fFL.GetAt(i), food, seen, seenEnd))
 				return true
 			endif
 			i += 1

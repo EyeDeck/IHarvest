@@ -668,14 +668,14 @@ State Learning
 EndState
 
 Function CheckUpdates()
-	int versionCurrent = 010001 ; 01.00.01
+	int versionCurrent = 010002 ; 01.00.02
 	IH_Util.Trace("Checking for updates; last version: " + version + ", current version: " + versionCurrent)
 	if (version < versionCurrent)
 		if (version == 0)
 			IH_Util.Trace("\tv1.0.1: Initializing StandbyGetterCrittersGT array")
 			StandbyGetterCrittersGT = new IH_GetterCritterScript[128]
 		endif
-		IH_Util.Trace("Finished updates.")
+		IH_Util.Trace("Finished updates. New version is: " + versionCurrent)
 	else
 		IH_Util.Trace("No update this load.")
 	endif
