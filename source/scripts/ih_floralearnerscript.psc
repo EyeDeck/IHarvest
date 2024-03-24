@@ -136,6 +136,14 @@ Function DoThing()
 		return
 	endif
 	
+	ccBGSSSE025_HarvestableActivator thisCCSS = this as ccBGSSSE025_HarvestableActivator
+	if (thisCCSS != None)
+		if (thisCCSS.itemToHarvest != None || thisCCSS.leveledRareCuriosItem != None && IH_Util.ProducesIngredient(thisCCSS.leveledRareCuriosItem, learnFood, learnHF))
+			IH_LearnedTypes.AddForm(base)
+			IH_Util.Trace("\tLearner: Learned ccBGSSSE025_HarvestableActivator " + this + "/" + base)
+		endif
+	endif
+	
 	if (this as wispCoreScript || this as wispCoreScript_lyu)
 		; wispCoreScript_lyu is from Harvest Overhaul Redone
 		IH_LearnedTypes.AddForm(base)

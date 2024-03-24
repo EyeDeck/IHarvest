@@ -80,7 +80,7 @@ bool busy = false
 int Property version Auto
 
 int Function GetVersion()
-	return 010104 ; 01.01.02
+	return 010105 ; 01.01.05
 EndFunction
 
 Event OnInit()
@@ -812,8 +812,8 @@ Function CheckUpdates()
 			v10102_UpdateHFSetting(false)
 		else
 			; update code NOT to apply on first run
-			if (version < 10100)
-				IH_Util.Trace("\tv1.1.0: Clearing flora cache so updated learner script can re-run")
+			if (version < 10105)
+				IH_Util.Trace("\tv1.1.5: Clearing flora cache so updated learner script can re-run")
 				ClearFloraCaches()
 			;/ elseif (version < 10009)
 				f = Game.GetFormFromFile(0x6025B3, "BSAssets.esm")

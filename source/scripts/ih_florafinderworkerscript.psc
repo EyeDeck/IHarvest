@@ -37,7 +37,7 @@ Event OnInit()
 	
 	; test if object is already harvested
 	bool isTree = (base as TreeObject) != None
-	if ((isTree || base as Flora) && this.IsHarvested())
+	if (((isTree || base as Flora) && this.IsHarvested()) || this.GetState() == "harvested")
 		UpdateOwner(this, 4)
 		return
 	endif
