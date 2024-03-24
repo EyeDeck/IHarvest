@@ -169,7 +169,7 @@ Event OnOptionMenuAccept(int a_option, int a_index)
 			SetMenuOptionValue(OIDquestmode, "$Start")
 		else
 			SetMenuOptionValue(OIDquestmode, "$skypal")
-			IH_PersistentData.VerifySkypalVersion()
+			IH_PersistentData.VerifySkypalVersion(true)
 		endif
 	endif
 EndEvent

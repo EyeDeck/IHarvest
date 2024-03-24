@@ -1103,13 +1103,15 @@ Function v10200_SetDefaultSearchMode()
 	endif
 EndFunction
 
-bool Function VerifySkypalVersion()
+bool Function VerifySkypalVersion(bool warn = false)
 	Debug.Trace(self + " Checking if doticu's SkyPal library is installed (this may error)")
 	if (SkyPal.Has_DLL() == false)
-		IH_SkyPalNotWorking.Show()
+		if (warn)
+			IH_SkyPalNotWorking.Show()
+		endif
 		return false
 	endif
-	if (SkyPal.Has_Version(1,0,1, "<"))
+	if (warn && SkyPal.Has_Version(1,0,1, "<"))
 		IH_SkyPalOutOfDate.Show()
 		; deliberately return true anyway
 	endif
