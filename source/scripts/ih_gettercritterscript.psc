@@ -37,9 +37,7 @@ int pathingMarkerID = -1
 Event OnInit()
 	; this effect plays when the critter is "spawned", which actually means "recycled from the cache" most of the time
 	; allows us to just reuse the same animation object every time we "spawn" to avoid having to create any refs each "cast"
-	SpawnExplosion = PlaceAtMe(IH_FXGetterCritterSpawnPoof, 1, false, false)
-	SpawnMeasurementMarker()
-	SpawnExplosion.SetScale(0.225)
+	CheckPersistentSpawns()
 	GoToState("Done")
 EndEvent
 
@@ -58,6 +56,8 @@ State Init
 			return
 		endif
 		GoToState("Started")
+		
+		CheckPersistentSpawns()
 		
 		;~_Util.Trace(self + " Critter's thread started")
 		
@@ -200,18 +200,15 @@ State Init
 			return
 		endif
 		GotoState("Harvesting")
-		if (targetBase as Ingredient)
-			; activating ingredient works, but always cuts the stack size down to 1 for some reason
+		IH_AbsorbGreenTargetVFX.Stop(Target)
+		if (targetBase as TreeObject || targetBase as Flora || targetBase as Activator)
+			Target.Activate(self)
+		elseif (targetBase as Ingredient || targetBase as Ammo || targetBase as Armor || targetBase as Book || targetBase as MiscObject || targetBase as Potion || targetBase as Scroll || targetBase as Weapon)
+			; any item that can be picked up must be specially handled, otherwise making an Actor Activate() the item
+			; can potentially delete items (stacked items will only pick up exactly one item from the stavk)
 			AddItem(Target)
-		;/	if (Target != None)
-				;~_Util.Trace(self + " Target " + Target + " is not None, why? " + GetItemCount(targetBase))
-			else
-				;~_Util.Trace(self + " Target went None like it should.")
-			endif
-		/;
 		else
 			Target.Activate(self)
-			IH_AbsorbGreenTargetVFX.Stop(Target)
 		endif
 		IH_AbsorbGreenCastVFX.Stop(self)
 		
@@ -382,11 +379,18 @@ State Done
 		return true
 	EndFunction
 	
+	Function CleanErrantGraphics()
+		Disable()
+		if (SpawnExplosion)
+			SpawnExplosion.Disable()
+		endif
+	EndFunction
+	
 	Event OnUpdate()
 		float thistime = Utility.GetCurrentRealTime()
 		if (thistime > stucktime + 1.5)
 			if (SpawnExplosion)
-				SpawnExplosion.DisableNoWait()
+				SpawnExplosion.Disable()
 			endif
 		else
 			; I have no idea why this is needed—maybe some external script is registering us for updates for some reason?
@@ -405,7 +409,12 @@ Function CheckAndPlayDrainVFX()
 EndFunction
 
 ; separated out of OnInit() so I could update a dev save
-Function SpawnMeasurementMarker()
+Function CheckPersistentSpawns()
+	if (SpawnExplosion == None)
+		SpawnExplosion = PlaceAtMe(IH_FXGetterCritterSpawnPoof, 1, false, false)
+		SpawnExplosion.SetScale(0.225)
+	endif
+	
 	if (MeasurementMarker == None)
 		MeasurementMarker = PlaceAtMe(XMarker, 1, true, true)
 	endif
@@ -630,6 +639,9 @@ Function Delete()
 	
 	GoToState("Deleted")
 	parent.Delete()
+EndFunction
+
+Function CleanErrantGraphics()
 EndFunction
 
 ;/ =========================== \;
