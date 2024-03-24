@@ -3,8 +3,9 @@ Scriptname IH_HarvestSpellScript extends ActiveMagicEffect
 Actor Property PlayerRef Auto
 
 Keyword Property IH_SMKeyword Auto
-; IH_FloraFinderScript Property IH_FloraFinder Auto
+
 IH_PersistentDataScript Property IH_PersistentData Auto
+IH_FloraLearnerControllerScript Property IH_FloraLearnerController Auto
 
 Perk Property GreenThumb Auto
 GlobalVariable Property IH_InheritGreenThumb Auto
@@ -12,6 +13,7 @@ GlobalVariable Property IH_CastExp Auto
 GlobalVariable Property IH_SpawnDistanceMult Auto
 
 GlobalVariable Property IH_CurrentSearchRadius Auto
+GlobalVariable Property IH_LearnerRunning Auto
 
 Actor caster
 
@@ -71,7 +73,6 @@ float casterSpeedMult = 100.0
 bool casterIsRunning = false
 
 Event OnEffectStart(Actor akTarget, Actor akCaster)
-	DEBUG.OpenUserLog("IHarvest")
 ;	IH_Util.Trace("Cast effect starting")
 	cachedFloraCount = 0
 	caster = akCaster
@@ -233,9 +234,15 @@ ObjectReference Function GetHarvestable()
 	endif
 	
 	;~_Util.Trace("cachedFloraCount:" + cachedFloraCount + " cachedFlora:" + cachedFlora)
+	
 	if (cachedFloraCount == 0)
 		;~_Util.Trace("GetHarvestable() could not find any flora; running learning routine and returning None")
-		IH_PersistentData.LearnHarvestables()
+		
+		; IH_FloraLearnerController might have a queue, so we check a global variable 
+		; instead of interacting with the script directly to avoid getting stuck in that
+		if (IH_LearnerRunning.GetValue() == 0.0)
+			IH_FloraLearnerController.Run()
+		endif
 		return None
 	endif
 	cachedFloraCount -= 1

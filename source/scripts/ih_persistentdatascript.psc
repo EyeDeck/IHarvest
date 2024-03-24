@@ -2,8 +2,18 @@ Scriptname IH_PersistentDataScript extends Quest
 
 Actor Property PlayerRef Auto
 
+bool Property CanShowMismatchWarning = true Auto
+
+Message Property IH_SKSENotInstalled		Auto
+Message Property IH_SKSENotRunning			Auto
+Message Property IH_SKSEMismatch			Auto
+Message Property IH_Update					Auto
+Message Property IH_UpdateUnsupported		Auto
+
 GlobalVariable Property IH_CritterCap Auto
 GlobalVariable Property IH_SetPlayerNotPushable Auto
+
+; VisualEffect Property IH_PlayerCapsuleEffect Auto
 
 float Property cacheDecayRate = 5.0 Auto
 {The oldest entry in our ignore cache will be popped out once every <this many> seconds.
@@ -15,7 +25,6 @@ int Property pathAliasCount = 64 Auto
 
 Keyword Property IH_SMKeyword Auto
 Quest Property IH_FloraFinder Auto
-Quest Property IH_FloraLearner Auto
 
 Formlist Property IH_ExaminedTypes Auto
 Formlist Property IH_LearnedTypes Auto
@@ -36,8 +45,8 @@ int standbyCritterCountGT = 0
 
 int activeCritterCount = 0
 
-int lastPushable = -1
-Race playerRace
+; int lastPushable = -1
+; Race playerRace
 
 ObjectReference[] Property PackageTargets Auto
 bool[] PathingMarkerCheckout
@@ -55,10 +64,6 @@ int cachedFlora = 0
 
 bool busy = false
 
-int lastExaminedTypesSize = 0
-Cell lastLearnedCell
-bool learnerRunning = false
-
 int Property version Auto
 
 Event OnInit()
@@ -70,7 +75,7 @@ Function Init()
 	ActiveGetterCritters = new IH_GetterCritterScript[128]
 	PathingMarkerCheckout = new bool[64]
 	if (cacheSize < 0)
-		cacheSize = GetNumAliases() - pathAliasCount
+		cacheSize = GetNumAliases() - pathAliasCount - 1
 	endif
 EndFunction
 
@@ -224,14 +229,15 @@ IH_GetterCritterScript Function GetGetterCritter2(Actor caster, bool gt)
 		return None
 	endif
 	
-	if (activeCritterCount == 1 && IH_SetPlayerNotPushable.GetValue() > 0.0)
-		playerRace = PlayerRef.GetRace()
+	;/ if (activeCritterCount == 1 && IH_SetPlayerNotPushable.GetValue() > 0.0)
+		;/ playerRace = PlayerRef.GetRace()
 		lastPushable = playerRace.IsNotPushable() as int
 		if (lastPushable == 0)
 			IH_Util.Trace("Setting not pushable flag on player race " +playerRace)
 			playerRace.MakeNotPushable()
 		endif
-	endif
+		IH_PlayerCapsuleEffect.Play(PlayerRef)
+	endif ; /;
 	
 	return toReturn
 EndFunction
@@ -292,13 +298,15 @@ Function ReturnGetterCritter2(IH_GetterCritterScript c, bool gt)
 		c.Delete()
 	endif
 	
-	if (activeCritterCount == 0 && lastPushable != -1)
+	;/ if (activeCritterCount == 0) ;&& lastPushable != -1)
+		
 		if (lastPushable == 0)
 			IH_Util.Trace("Restoring pushable flag on " + playerRace)
 			PlayerRef.GetRace().MakePushable()
 		endif
-		lastPushable = -1
-	endif
+		lastPushable = -1 ;
+		IH_PlayerCapsuleEffect.Stop(PlayerRef)
+	endif ; /;
 EndFunction
 
 ; --------- Normal critter functions ---------
@@ -499,6 +507,8 @@ EndFunction
 
 ; Mostly for fixing my own save that I made a mess of while playtesting
 Function RecallAllCritters()
+	Debug.OpenUserLog("IHarvest")
+	
 	IH_Util.Trace("Recalling all critters...\n\tActiveGetterCritters:")
 	PrintCritterArray(ActiveGetterCritters)
 	IH_Util.Trace("\n\tStandbyGetterCritters: ")
@@ -654,53 +664,66 @@ Function PrintCritterArray(IH_GetterCritterScript[] arr)
 	endwhile
 EndFunction
 
-Function LearnHarvestables()
-	if (GetState() != "Learning")
-		GoToState("Learning")
-		RegisterForSingleUpdate(0.0)
-	endif
-EndFunction
-
-State Learning
-	Event OnUpdate()
-		if (learnerRunning)
-			IH_FloraLearner.Stop()
-			learnerRunning = false
-		endif
-		int examinedTypesSize = IH_ExaminedTypes.GetSize()
-		Cell currentCell = PlayerRef.GetParentCell()
-		
-		; did the last run not find anything, or was it cast with the same cells loaded?
-		; if yes to both, don't bother running, because starting that quest is very expensive (and potentially crashy)
-		if (lastExaminedTypesSize != examinedTypesSize || currentCell != lastLearnedCell)
-			IH_Util.Trace("Starting learner threads; cell: " + currentCell + " / last count: " + examinedTypesSize)
-			learnerRunning = true
-			IH_FloraLearner.Start()
-			RegisterForSingleUpdate(0.5)
-		else
-			IH_Util.Trace("Skipping/ending learner routine; cell: " + currentCell + " / last count: " + examinedTypesSize)
-			; back to business as usual
-			GoToState("")
-			RegisterForSingleUpdate(cacheDecayRate)
-		endif
-		
-		lastExaminedTypesSize = examinedTypesSize
-		lastLearnedCell = currentCell
-	EndEvent
-EndState
-
 Function CheckUpdates()
-	int versionCurrent = 010003 ; 01.00.02
+	int versionCurrent = 010004 ; 01.00.04
+	
+	Debug.Trace(self + " Checking if SKSE is installed (this may error)...")
+	IH_Util.Trace("Checking if SKSE is installed...")
+	int seVR = SKSE.GetVersionRelease()
+	int seVS = SKSE.GetScriptVersionRelease()
+	if (seVR == 0)
+		if (seVS == 0)
+			IH_Util.Trace("SKSE appears not to be running.")
+			Debug.Trace(self + " SKSE not detected. A warning message will be shown, and this mod will not function.")
+			IH_SKSENotInstalled.Show()
+		else
+			IH_Util.Trace("SKSE appears not to be running, however the SKSE scripts appear to be installed.")
+			Debug.Trace(self + " SKSE not detected, however SKSE scripts are installed. A warning message will be shown, and this mod will not function.")
+			IH_SKSENotRunning.Show()
+		endif
+		return
+	else
+		int seV = SKSE.GetVersion()
+		int seVM = SKSE.GetVersionMinor()
+		int seVB = SKSE.GetVersionBeta()
+		IH_Util.Trace("SKSE version " + seV + "." + seVM + "." + seVB + "." + seVR + ", script version " + seVS + " detected.")
+		if (seVR != seVS)
+			IH_Util.Trace("...SKSE script/release version mismatch detected. This mod may or may not function correctly.")
+			if (CanShowMismatchWarning)
+				CanShowMismatchWarning = !(IH_SKSEMismatch.Show(seV, seVM, seVB, seVR, seVS) as bool)
+			endif
+		endif
+	endif
+	
 	IH_Util.Trace("Checking for updates; last version: " + version + ", current version: " + versionCurrent)
-	if (version < versionCurrent)
+	if (versionCurrent == version)
+		IH_Util.Trace("No update this load.")
+	elseif (versionCurrent > version)
 		if (version == 0)
+			; always fires on first run because I forgot to put a version var in v1.0.0
 			IH_Util.Trace("\tv1.0.1: Initializing StandbyGetterCrittersGT array")
 			StandbyGetterCrittersGT = new IH_GetterCritterScript[128]
 		endif
 		IH_Util.Trace("Finished updates. New version is: " + versionCurrent)
-	else
-		IH_Util.Trace("No update this load.")
+		IH_Update.Show(version / 10000.0, versionCurrent / 10000.0)
+	else ;if (versionCurrent < version), i.e. rollback
+		IH_UpdateUnsupported.Show(version / 10000.0, versionCurrent / 10000.0)
 	endif
 	version = versionCurrent
 EndFunction
 
+;/ =========================== \;
+; Deprecated function graveyard ;
+;\ =========================== /;
+
+; moved to IH_FloraLearnerControllerScript
+State Learning
+	Event OnUpdate()
+		GoToState("")
+		RegisterForSingleUpdate(0.0)
+	EndEvent
+EndState
+
+; moved to IH_FloraLearnerControllerScript
+Function LearnHarvestables()
+EndFunction

@@ -211,7 +211,7 @@ State Init
 			; set up the pathing marker while translating
 			CurrentPathTarget = Caster
 			if (returnPointOffset > 0.0)
-				IH_Util.Trace(CurrentPathTarget)
+;				IH_Util.Trace(CurrentPathTarget)
 				MoveToClosestRadius(PathingMarker, CurrentPathTarget, returnPointOffset, returnPointOffset * 1.25)
 			else
 				PathingMarker.MoveTo(CurrentPathTarget)
@@ -238,10 +238,10 @@ State Init
 			IH_PersistentData.ReturnPathingAlias(pathingMarkerID)
 		endif
 		
-		if (returnPointOffset < 196.0)
-			TranslateWithinRadius(Caster, 0.0, 196.0, 384.0, 800.0, true, 0, 1.5)
+		if (returnPointOffset < 192.0)
+			TranslateWithinRadius(Caster, 0.0, 192.0, 384.0, 800.0, true, 0, 1.5)
 		else
-			TranslateWithinRadius(Caster, 0.0, returnPointOffset, returnPointOffset*1.25, 800.0, true, 0, 1.5)
+			TranslateWithinRadius(Caster, 0.0, returnPointOffset, returnPointOffset + 192.0, 800.0, true, 0, 1.5)
 		endif
 		
 		if (Is3dLoaded())
@@ -551,6 +551,7 @@ Function Cleanup()
 	Caster = None
 	Target = None
 	CurrentPathTarget = None
+	CurrentPathAlias = None
 	
 	if (pathingMarkerID >= 0)
 		int toReturn = pathingMarkerID

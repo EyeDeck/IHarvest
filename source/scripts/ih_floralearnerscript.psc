@@ -11,9 +11,12 @@ FormList Property IH_LearnedTypes Auto
 
 GlobalVariable Property IH_LearnFood Auto
 
+IH_FloraLearnerControllerScript Property IH_FloraLearnerController Auto ; v1.0.5: added a callback
+
 Event OnInit()
 	DoThing()
 	Clear()
+	IH_FloraLearnerController.LearnerCallback()
 EndEvent
 
 Function DoThing()
@@ -67,7 +70,6 @@ Function DoThing()
 		endif
 		return
 	endif
-	
 	
 	; Here's where mod compatibility code would have to go to add additional non-vanilla scripts
 	Activator thisActivator = base as Activator
