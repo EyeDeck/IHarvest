@@ -160,6 +160,11 @@ float[] Function GetClosestPointAtRadius(float startX, float startY, float start
 	return out
 EndFunction
 
+Function QuarantineObject(ObjectReference thing) global
+	thing.MoveTo(Game.GetForm(0x1037F2) as ObjectReference) ; a marker in WIDeadBodyCleanupCell
+	IH_Util.Trace("Moved deleted object " + thing + " into quarantine cell")
+EndFunction
+
 Function Trace(string str, int severity = 0) Global
 { 0 = Info, 1 = Warning, 2 = Error }
 	DEBUG.TraceUser("IHarvest", str, severity)

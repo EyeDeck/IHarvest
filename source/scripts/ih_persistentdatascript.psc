@@ -16,8 +16,10 @@ Message Property IH_StoryManagerHighLoad	Auto
 Message Property IH_StatsDisplay			Auto
 Message Property IH_OperationFinishedCache	Auto
 Message Property IH_OperationFinishedRecall	Auto
+Message Property IH_OperationFinishedDelete	Auto
 
-FormList Property IH_SpawnableBase			Auto
+FormList Property IH_SpawnableBase_01		Auto
+; Forgot to fill this when I first added it, so need a new property now
 
 GlobalVariable Property IH_CritterCap Auto
 GlobalVariable Property IH_SetPlayerNotPushable Auto
@@ -84,7 +86,7 @@ bool busy = false
 int Property version Auto
 
 int Function GetVersion()
-	return 010106 ; 01.01.06
+	return 010107 ; 01.01.07
 EndFunction
 
 Event OnInit()
@@ -768,6 +770,8 @@ Function TallyCritterStats()
 EndFunction
 
 Function DeleteGetterCritters()
+	float time = Utility.GetCurrentRealTime()
+	
 	RecallAllCritters()
 	
 	IH_Util.Trace("Getter critter Final Solution has been put into effect--sending critters to concentration camps...")
@@ -806,6 +810,7 @@ Function DeleteGetterCritters()
 		c = (allCritters[i] as IH_GetterCritterScript)
 		if (c != None)
 			c.Disable()
+			IH_Util.QuarantineObject(c)
 			c.Delete()
 		endif
 		i += 1
@@ -820,19 +825,25 @@ Function DeleteGetterCritters()
 	ActiveGetterCritters = new IH_GetterCritterScript[128]
 	activeCritterCount = 0
 	
+	int orphans = 0
 	bool keepDeleting = true
 	while (keepDeleting)
-		ObjectReference thing = Game.FindRandomReferenceOfAnyTypeInListFromRef(IH_SpawnableBase, PlayerRef, 2000000.0)
+		ObjectReference thing = Game.FindClosestReferenceOfAnyTypeInListFromRef(IH_SpawnableBase_01, PlayerRef, 128000.0)
 		if (thing == None)
 			keepDeleting = false
 		else
 			IH_Util.Trace("...found unreferenced spawned thing " + thing + " to delete...")
 			thing.Disable()
+			IH_Util.QuarantineObject(thing)
 			thing.Delete()
+			orphans += 1
 		endif
 	endwhile
 	
-	IH_Util.Trace("...critters have been exterminated.")
+	time = Utility.GetCurrentRealTime() - time
+	IH_Util.Trace("...critters exterminiated in " + time + "s. Also cleaned up " + orphans + " orphaned objects.")
+	
+	IH_OperationFinishedDelete.Show(time, orphans)
 EndFunction
 
 Function CheckUpdates()
