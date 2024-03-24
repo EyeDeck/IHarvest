@@ -25,7 +25,13 @@ Event OnInit()
 		; I tried multithreading this but it simply does not work, it often waits until the OnInit() thread finishes before the update thread starts
 		; RegisterForSingleUpdate(0.0)
 		
-		DoExtraFiltering(GetReference(), Caster.GetReference() as Actor, Index, ArrayPointerHolder.RefPointer, ArrayPointerHolder.IntPointer, PlayerRef, Player, false)
+		ReturnArray = ArrayPointerHolder.RefPointer
+		ErrorArray = ArrayPointerHolder.IntPointer
+		if (ReturnArray && ErrorArray)
+			DoExtraFiltering(GetReference(), Caster.GetReference() as Actor, Index, ReturnArray, ErrorArray, PlayerRef, Player, false)
+		else
+			IH_Util.Trace(self + " ErrorArray and/or ReturnArray not filled yet--this is normal on mod init;\t\tErrorArray=" + ErrorArray + ",\t\tReturnArray=" + ReturnArray)
+		endif
 	endif
 EndEvent
 
@@ -55,7 +61,8 @@ Event OnUpdate()
 EndEvent
 
 Function DoExtraFiltering(ObjectReference this, Actor casterRef, int i, ObjectReference[] rA, int[] iA, Actor PlayerRef, ActorBase Player, bool ignoreOwnership) Global
-	; IH_Util.Trace("ref: " + (self.GetOwningQuest().GetAlias(0) as ReferenceAlias).GetReference())
+	IH_Util.Trace(" index " + i + " filled with " + this + ";\t\tiA=" + iA + ",\t\trA=" + rA)
+
 	if (this == None)
 	;	IH_Util.Trace("\t" + self + " GetReference() is null.")
 		; UpdateOwner(None, 1, i, rA, iA)

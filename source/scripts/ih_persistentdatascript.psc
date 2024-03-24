@@ -15,6 +15,7 @@ Message Property IH_UpdateUnsupported		Auto
 Message Property IH_StoryManagerHighLoad	Auto
 Message Property IH_SkyPalNotWorking		Auto
 Message Property IH_SkyPalOutOfDate			Auto
+Message Property IH_ModReset				Auto
 
 Message Property IH_StatsDisplay			Auto
 Message Property IH_OperationFinishedCache	Auto
@@ -100,7 +101,7 @@ bool busy = false
 int Property version Auto
 
 int Function GetVersion()
-	return 010201 ; 01.02.01
+	return 010202 ; 01.02.02
 EndFunction
 
 Event OnInit()
@@ -153,6 +154,11 @@ Function OnGameLoad()
 EndFunction
 
 Function AddIgnoredObject(ObjectReference thing)
+	if (thing == None)
+		IH_Util.Trace("Called AddIgnoredObject with None object? skipping",1)
+		return
+	endif
+	
 	int thisIndex = leadingIndex
 	; we must delay the actual write until the end of the function to preserve thread safety
 	; don't want to mangle up our indicies because the thread unlocks too early
@@ -222,11 +228,9 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 	
 	IH_FloraFinderScript finderQuest
 	
-	if (searchMode == 2)
+	if (searchMode == 2) ; SkyPal Mode
 		; Get refs in the loaded cell area
-		IH_Util.Trace("skypalFetchGrid start")
 		ObjectReference[] refs =  skypal_references.Grid()
-		IH_Util.Trace("skypalFetchGrid end")
 		if (refs as bool == false)
 			IH_SkyPalNotWorking.Show()
 			busy = false
@@ -268,11 +272,14 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 			IH_FloraFinderWorkersSkypal[i].FillAndRun(refs[i], casterA, i, FinderThreadResultsRefs, FinderThreadResultsInts)
 			i += 1
 		endwhile
+		
+		; if SkyPal finds < 8 refs, set the results array to indicate no result
 		while (i < workerCount)
 			FinderThreadResultsInts[i] = 1
+			FinderThreadResultsRefs[i] = None
 			i += 1
 		endwhile
-	elseif (caster == PlayerRef && searchMode == 1)
+	elseif (searchMode == 1 && caster == PlayerRef) ; Start Mode (only works for player caster)
 		IH_Util.Trace("Start()ing search quest...waiting for worker threads to finish. ")
 		finderQuest = IH_FloraFinderStart
 		if (finderQuest.Start())
@@ -289,7 +296,7 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 				IH_Util.Trace(finderQuest + " failed to start, and is not already running! This should never happen.", 1)
 			endif
 		endif
-	else
+	else ; Story Manager mode
 		IH_Util.Trace("Sent story event...waiting for worker threads to finish.")
 		finderQuest = IH_FloraFinderSM
 		IH_SMKeyword.SendStoryEvent(akRef1 = caster, aiValue1 = sendTime, aiValue2 = 1)
@@ -366,9 +373,9 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 	;endwhile
 	
 	i = 0
-	while (IH_Util.AreAllIntsAtOrAboveThreshold(FinderThreadResultsInts, 0) == false && i < 100)
+	while (IH_Util.AreAllIntsAtOrAboveThreshold(FinderThreadResultsInts, 0) == false && i < 200)
 	;	IH_Util.Trace("finishedWorkers:" + finishedWorkers)
-		Utility.WaitMenuMode(0.033) ; ~2 frames at 60fps
+		Utility.WaitMenuMode(0.05) ; ~3 frames at 60fps
 		i += 1 ; failsafe
 	endwhile
 	
@@ -377,12 +384,15 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 		finderQuest.Stop()
 	endif
 	
+	IH_Util.Trace("Results array:\n\t\t" + FinderThreadResultsRefs + "\n\t\t" + FinderThreadResultsInts)
+	
 	ObjectReference[] toReturn = new ObjectReference[8] ; workerCount
 	i = 0
 	int j = 0
 	while (i < workerCount)
 		ObjectReference ref = FinderThreadResultsRefs[i]
 		if (FinderThreadResultsInts[i] > 1); -1 = no result yet; 0 = found something; 1 = found nothing; 2+ = filtered
+			; unerrored returns (0) will be filtered on critter dispatch
 			AddIgnoredObject(ref)
 		else
 			toReturn[j] = FinderThreadResultsRefs[i]
@@ -414,7 +424,7 @@ IH_GetterCritterScript Function GetGetterCritter2(Actor caster, bool gt)
 	if (gt)
 		if (standbyCritterCountGT == 0)
 			toReturn = caster.PlaceAtMe(IH_GetterCritterGT, 1, true, true) as IH_GetterCritterScript
-			toReturn.SetPlayerTeammate(true)
+			; toReturn.SetPlayerTeammate(true) ; 1.2.2: removed this in favor of the superior SkyPal solution
 		else
 			toReturn = GetFirstStandbyCritterGT()
 			if (!toReturn)
@@ -429,7 +439,7 @@ IH_GetterCritterScript Function GetGetterCritter2(Actor caster, bool gt)
 	else
 		if (standbyCritterCount == 0)
 			toReturn = caster.PlaceAtMe(IH_GetterCritter, 1, true, true) as IH_GetterCritterScript
-			toReturn.SetPlayerTeammate(true)
+			toReturn.SetPlayerTeammate(true) ; 1.2.2: removed this in favor of the superior SkyPal solution
 		else
 			toReturn = GetFirstStandbyCritter()
 			if (!toReturn)
@@ -846,7 +856,8 @@ Function TallyCritterStats()
 		IH_GetterCritterScript c = StandbyGetterCritters[i]
 		if (c)
 			critters += 1
-			current = c.GetActorValueMax("Fame")
+			current = c.ThingsHarvested
+			; current = c.GetActorValueMax("Fame")
 			; IH_Util.Trace(c + " " + c.GetActorValue("Fame") + " " + c.GetBaseActorValue("Fame") + " " + c.GetActorValueMax("Fame"))
 			fameCritters += current
 			
@@ -859,7 +870,8 @@ Function TallyCritterStats()
 		if (c)
 			crittersGT += 1
 			
-			current = c.GetActorValueMax("Fame")
+			current = c.ThingsHarvested
+			; current = c.GetActorValueMax("Fame")
 			fameCrittersGT += current
 			
 			if (top < current)
@@ -875,6 +887,10 @@ Function TallyCritterStats()
 EndFunction
 
 Function DeleteGetterCritters()
+	if (IH_ModReset.Show() != 1.0)
+		return
+	endif
+	
 	float time = Utility.GetCurrentRealTime()
 	
 	RecallAllCritters()
@@ -921,6 +937,61 @@ Function DeleteGetterCritters()
 		i += 1
 	endwhile
 	
+	int orphans = 0
+	if (IH_SearchMode.GetValue() == 2.0)
+		ObjectReference[] refs = skypal_references.All()
+		refs = skypal_references.Filter_Bases_Form_List(refs, IH_SpawnableBase_01, "")
+		refs = skypal_references.Filter_Deleted(refs, "!")
+		
+		i = refs.length - 1
+		IH_Util.Trace("Found " + i + " spawned IHarvest objects via SkyPal--deleting...")
+		while (i > 0)
+			ObjectReference thing = refs[i]
+			if (thing != None)
+				Form base = thing.GetBaseObject()
+				if (IH_SpawnableBase_01.HasForm(base)) ; just to be safe
+					IH_Util.Trace("\t...found spawned thing " + thing + " of type " + base + " to delete...")
+					thing.Disable()
+					IH_Util.QuarantineObject(thing)
+					thing.Delete()
+					orphans += 1
+				else
+					IH_Util.Trace("\t...skipped thing " + thing)
+				endif
+			endif
+			i -= 1
+		endwhile
+	else
+		IH_Util.Trace("Looking for orphaned objects to delete...")
+		bool keepDeleting = true
+		while (keepDeleting)
+			ObjectReference thing = Game.FindClosestReferenceOfAnyTypeInListFromRef(IH_SpawnableBase_01, PlayerRef, 128000.0)
+			if (thing == None)
+				keepDeleting = false
+			else
+				IH_Util.Trace("\t...found unreferenced spawned thing " + thing + " to delete...")
+				thing.Disable()
+				IH_Util.QuarantineObject(thing)
+				thing.Delete()
+				orphans += 1
+			endif
+		endwhile
+	endif
+	
+	IH_Util.Trace("...critters exterminiated, and " + orphans + " possible orphans cleaned up. Restarting main quest...")
+	
+	self.Stop()
+	
+	IH_FloraLearnerController.Stop()
+	IH_FloraFinderSM.Stop()
+	IH_FloraFinderStart.Stop()
+	IH_FloraFinderSkypal.Stop()
+	
+	IH_Util.Trace(self + " stopped. Restarting...")
+	Utility.Wait(2.0)
+	self.Start()
+	IH_Util.Trace(self + " restarted. Reinitializing some arrays...")
+	
 	StandbyGetterCritters = new IH_GetterCritterScript[128]
 	standbyCritterCount = 0
 	
@@ -930,23 +1001,8 @@ Function DeleteGetterCritters()
 	ActiveGetterCritters = new IH_GetterCritterScript[128]
 	activeCritterCount = 0
 	
-	int orphans = 0
-	bool keepDeleting = true
-	while (keepDeleting)
-		ObjectReference thing = Game.FindClosestReferenceOfAnyTypeInListFromRef(IH_SpawnableBase_01, PlayerRef, 128000.0)
-		if (thing == None)
-			keepDeleting = false
-		else
-			IH_Util.Trace("...found unreferenced spawned thing " + thing + " to delete...")
-			thing.Disable()
-			IH_Util.QuarantineObject(thing)
-			thing.Delete()
-			orphans += 1
-		endif
-	endwhile
-	
 	time = Utility.GetCurrentRealTime() - time
-	IH_Util.Trace("...critters exterminiated in " + time + "s. Also cleaned up " + orphans + " orphaned objects.")
+	IH_Util.Trace("...done, mod reset in " + time + "s.")
 	
 	IH_OperationFinishedDelete.Show(time, orphans)
 EndFunction
@@ -1016,11 +1072,15 @@ Function CheckUpdates()
 			
 			if (version < 10102)
 				v10102_UpdateHFSetting(true)
-				v10102_SetCrittersTeammate()
+			;	v10102_SetCrittersTeammate()
 			endif
 			
 			if (version < 10201)
 				v10200_SetDefaultSearchMode()
+			endif
+			
+			if (version < 10202)
+				v10202_UnsetCrittersTeammate()
 			endif
 		endif
 		
@@ -1045,16 +1105,21 @@ Function v10102_UpdateHFSetting(bool allowReset = false)
 	
 	; 0xB1987 was added in USSEP v4.2.0, when the relevant fixed was merged, so test for it
 	; Failing that, test whether IHarvestVanillaFixes module is installed
-	if (Game.GetFormFromFile(0xB1987, "Unofficial Skyrim Special Edition Patch.esp") != None \
-	 || Game.GetFormFromFile(0x800, "IHarvestVanillaFixes.esp") != None)
+	if ((Game.GetFormFromFile(0xB1987, "Unofficial Skyrim Special Edition Patch.esp") != None \
+	 || Game.GetFormFromFile(0x800, "IHarvestVanillaFixes.esp") != None) \
+	 && IH_LearnHearthfire.GetValue() != 1.0)
 		IH_Util.Trace("\tv1.1.2: USSEP v4.2.0+ or IHarvestVanillaFixes detected; enabling HearthFire compat setting and resetting flora cache")
 		IH_LearnHearthfire.SetValue(1.0)
-		ClearFloraCaches()
+		if (allowReset == false)
+			ClearFloraCaches()
+		endif
 	endif
 EndFunction
 
-Function v10102_SetCrittersTeammate()
-	IH_Util.Trace("\tv1.1.2: Gathering up all the getter critters...")
+;Function v10102_SetCrittersTeammate()
+Function v10202_UnsetCrittersTeammate()
+	;IH_Util.Trace("\tv1.1.2: Gathering up all the getter critters...")
+	IH_Util.Trace("\tv1.2.2: Gathering up all the getter critters...")
 	Form[] allCritters = Utility.CreateFormArray(512, None)
 	int i = 0
 	int last = 0
@@ -1080,13 +1145,14 @@ Function v10102_SetCrittersTeammate()
 		
 		i += 1
 	endwhile
-	IH_Util.Trace("\t\t...SetPlayerTeammate()ing all " + last + " critters...")
+	IH_Util.Trace("\t\t...un-SetPlayerTeammate()ing all " + last + " critters...")
 	i = 0
 	IH_GetterCritterScript c
 	while (i < last)
 		c = (allCritters[i] as IH_GetterCritterScript)
 		if (c != None)
-			c.SetPlayerTeammate(true)
+			; c.SetPlayerTeammate(false) ; does this in the next function
+			c.MigrateFame()
 		endif
 		i += 1
 	endwhile

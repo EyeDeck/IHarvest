@@ -18,6 +18,8 @@ ObjectReference Property Target Auto
 ObjectReference Property SpawnExplosion Auto
 Static Property XMarker Auto
 
+int Property ThingsHarvested Auto
+
 bool Property HasGreenThumb Auto
 
 bool active = false
@@ -631,7 +633,7 @@ Function Cleanup()
 	stucktime = Utility.GetCurrentRealTime()
 	GotoState("Done")
 	RegisterForSingleUpdate(2.0) ; disable the poof object
-	ModActorValue("Fame", 1.0)
+	ThingsHarvested += 1
 	
 	if (active)
 		active = false
@@ -658,6 +660,15 @@ Function Delete()
 EndFunction
 
 Function CleanErrantGraphics()
+EndFunction
+
+Function MigrateFame()
+{The contents of this function can be safely NOPed out if you're trying to recompile this for Oldrim/SkyrimVR/SSE<1.10 for some reason}
+	self.SetPlayerTeammate(false)
+	
+	int fame = self.GetActorValueMax("Fame") as int ; this function added in SSE 1.10.something
+	ThingsHarvested = fame
+	ModActorValue("Fame", -fame)
 EndFunction
 
 ;/ =========================== \;
