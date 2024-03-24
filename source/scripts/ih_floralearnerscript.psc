@@ -19,6 +19,7 @@ FormList Property IH_ExaminedTypes Auto
 FormList Property IH_LearnedTypes Auto
 
 GlobalVariable Property IH_LearnFood Auto
+GlobalVariable Property IH_LearnHearthfire Auto
 
 IH_FloraLearnerControllerScript Property IH_FloraLearnerController Auto ; v1.0.5: added a callback
 
@@ -60,11 +61,12 @@ Function DoThing()
 		endif
 	endif
 	
+	bool learnHF = IH_LearnHearthfire.GetValue() > 0.0
 	TreeObject thisTree = base as TreeObject
 	if (thisTree != None)
 		; Most harvestable things are trees instead of flora, I have no idea why this is
 		ingr = thisTree.GetIngredient()
-		if (ingr != None && IH_Util.ProducesIngredient(ingr, learnFood))
+		if (ingr != None && IH_Util.ProducesIngredient(ingr, learnFood, learnHF))
 			IH_LearnedTypes.AddForm(base)
 			IH_Util.Trace("\tLearner: Learned TreeObject " + this + "/" + base)
 		else
@@ -75,7 +77,7 @@ Function DoThing()
 	Flora thisFlora = base as Flora
 	if (thisFlora != None)
 		ingr = thisFlora.GetIngredient()
-		if (ingr != None && IH_Util.ProducesIngredient(ingr, learnFood))
+		if (ingr != None && IH_Util.ProducesIngredient(ingr, learnFood, learnHF))
 			IH_LearnedTypes.AddForm(base)
 			IH_Util.Trace("\tLearner: Learned Flora " + this + "/" + base)
 		else
@@ -96,7 +98,7 @@ Function DoThing()
 	
 	Critter thisCritter = this as Critter
 	if (thisCritter != None)
-		if (thisCritter.lootableCount > 0 && (thisCritter.lootable || IH_Util.ProducesIngredient(thisCritter.nonIngredientLootable, learnFood)))
+		if (thisCritter.lootableCount > 0 && (thisCritter.lootable || IH_Util.ProducesIngredient(thisCritter.nonIngredientLootable, learnFood, learnHF)))
 			IH_LearnedTypes.AddForm(base)
 			IH_Util.Trace("\tLearner: Learned Critter " + this + "/" + base)
 		else
@@ -125,7 +127,7 @@ Function DoThing()
 	
 	DLC1TrapPoisonBloom thisPB = this as DLC1TrapPoisonBloom
 	if (thisPB != None)
-		if (thisPB.myIngredient != None || IH_Util.ProducesIngredient(thisPB.myMiscObject, learnFood) || IH_Util.ProducesIngredient(thisPB.myPotion, learnFood))
+		if (thisPB.myIngredient != None || IH_Util.ProducesIngredient(thisPB.myMiscObject, learnFood, learnHF) || IH_Util.ProducesIngredient(thisPB.myPotion, learnFood, learnHF))
 			IH_LearnedTypes.AddForm(base)
 			IH_Util.Trace("\tLearner: Learned DLC1TrapPoisonBloom " + this + "/" + base)
 		else

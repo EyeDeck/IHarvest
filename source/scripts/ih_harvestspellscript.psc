@@ -173,7 +173,7 @@ Event OnUpdate()
 	if (slowMode > 0)
 		thisDelay *= Math.pow(slowMode, 0.66)
 	endif
-	;~_Util.Trace("Delay: " + thisdelay)
+	; IH_Util.Trace("Delay: " + thisdelay)
 ;	if (allowReg)
 	;/ This line errors sometimes and I'm not sure I can fix it:
 	; >>https://www.afkmods.com/index.php?/topic/4129-skyrim-interpreting-papyrus-log-errors/
@@ -205,7 +205,7 @@ Function DoCast()
 	ObjectReference thing = GetHarvestable()
 	
 	if (thing == None)
-;		IH_Util.Trace("\tNo harvestables found.")
+		IH_Util.Trace("\tNo harvestables found.")
 		slowMode += 1 
 		return
 	else

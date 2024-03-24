@@ -5,6 +5,7 @@ GlobalVariable Property IH_CritterCap Auto
 GlobalVariable Property IH_NotificationSpam Auto
 GlobalVariable Property IH_InheritGreenThumb Auto
 GlobalVariable Property IH_LearnFood Auto
+GlobalVariable Property IH_LearnHearthfire Auto
 GlobalVariable Property IH_SpawnDistanceMult Auto
 GlobalVariable Property IH_OffsetReturnPoint Auto
 GlobalVariable Property IH_StaffDrainPerSpawn Auto
@@ -19,6 +20,7 @@ int OIDclear
 int OIDnspam
 int OIDgt
 int OIDfood
+int OIDhf
 int OIDspawnDist
 int OIDreturnOffset
 int OIDstats
@@ -35,6 +37,7 @@ Event OnPageReset(string a_page)
 		OIDexp = AddSliderOption("Experience Per Cast", IH_CastExp.GetValue(), "{2}")
 		OIDnspam = AddToggleOption("Item Notification Spam", IH_NotificationSpam.GetValue() as bool)
 		OIDfood = AddToggleOption("Harvest Food", IH_LearnFood.GetValue() as bool)
+		OIDhf = AddToggleOption("Harvest Hearthfire", IH_LearnHearthfire.GetValue() as bool)
 		
 		AddEmptyOption()
 		
@@ -69,6 +72,8 @@ Event OnOptionSelect(int a_option)
 		ToggleGlobal(IH_InheritGreenThumb, a_option)
 	elseif (a_option == OIDfood)
 		ToggleGlobal(IH_LearnFood, a_option)
+	elseif (a_option == OIDhf)
+		ToggleGlobal(IH_LearnHearthfire, a_option)
 	endif
 EndEvent
 
@@ -142,6 +147,9 @@ Event OnOptionDefault(int a_option)
 	elseif (a_option == OIDfood)
 		IH_LearnFood.SetValue(0.0)
 		SetToggleOptionValue(a_option, false)
+	elseif (a_option == OIDhf)
+		IH_LearnHearthfire.SetValue(0.0)
+		SetToggleOptionValue(a_option, false)
 	elseif (a_option == OIDspawnDist)
 		OnOptionSliderAccept(a_option, 1.0)
 	elseif (a_option == OIDreturnOffset)
@@ -168,6 +176,8 @@ Event OnOptionHighlight(int a_option)
 		SetInfoText("Toggles whether Getter Critters inherit the Green Thumb perk from from the caster, if they have it.\nYou may wish to disable this for balance reasons.")
 	elseif (a_option == OIDfood)
 		SetInfoText("Toggles whether the mod will also learn harvestables that produce food, instead of just ingredients.\nNOTE: Changes to this setting will not fully take effect until you also run Clear Flora Cache.")
+	elseif (a_option == OIDhf)
+		SetInfoText("Toggles whether the mod will attempt to harvest Hearthfire planters, and anything else using the same system.\nWill NOT work without USSEP 4.2.0+, or the optional \"Vanilla Fixes\" module.\nNOTE: Changes to this setting will not fully take effect until you also run Clear Flora Cache.")
 	elseif (a_option == OIDspawnDist)
 		SetInfoText("Multiplies the distance at which critters will (try to) spawn in front of the caster.\nNegative values will cause critters to spawn behind the caster instead.")
 	elseif (a_option == OIDreturnOffset)

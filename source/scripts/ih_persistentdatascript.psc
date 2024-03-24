@@ -19,6 +19,8 @@ Message Property IH_OperationFinishedRecall	Auto
 GlobalVariable Property IH_CritterCap Auto
 GlobalVariable Property IH_SetPlayerNotPushable Auto
 
+GlobalVariable Property IH_LearnHearthfire Auto
+
 ; VisualEffect Property IH_PlayerCapsuleEffect Auto
 
 float Property cacheDecayRate = 5.0 Auto
@@ -31,6 +33,7 @@ int Property pathAliasCount = 64 Auto
 
 Keyword Property IH_SMKeyword Auto
 Quest Property IH_FloraFinder Auto
+Quest Property IH_FloraLearner Auto
 
 Formlist Property IH_ExaminedTypes Auto
 Formlist Property IH_LearnedTypes Auto
@@ -75,7 +78,7 @@ bool busy = false
 int Property version Auto
 
 int Function GetVersion()
-	return 010101 ; 01.01.01
+	return 010102 ; 01.01.02
 EndFunction
 
 Event OnInit()
@@ -229,6 +232,7 @@ IH_GetterCritterScript Function GetGetterCritter2(Actor caster, bool gt)
 	if (gt)
 		if (standbyCritterCountGT == 0)
 			toReturn = caster.PlaceAtMe(IH_GetterCritterGT, 1, false, true) as IH_GetterCritterScript
+			toReturn.SetPlayerTeammate(true)
 		else
 			toReturn = GetFirstStandbyCritterGT()
 			if (!toReturn)
@@ -243,6 +247,7 @@ IH_GetterCritterScript Function GetGetterCritter2(Actor caster, bool gt)
 	else
 		if (standbyCritterCount == 0)
 			toReturn = caster.PlaceAtMe(IH_GetterCritter, 1, false, true) as IH_GetterCritterScript
+			toReturn.SetPlayerTeammate(true)
 		else
 			toReturn = GetFirstStandbyCritter()
 			if (!toReturn)
@@ -734,6 +739,7 @@ Function CheckUpdates()
 			; always fires on first run because I forgot to put a version var in v1.0.0
 			IH_Util.Trace("\tv1.0.1: Initializing StandbyGetterCrittersGT array")
 			StandbyGetterCrittersGT = new IH_GetterCritterScript[128]
+			v10102_UpdateHFSetting(false)
 		else
 			; update code NOT to apply on first run
 			if (version < 10100)
@@ -752,6 +758,10 @@ Function CheckUpdates()
 			; /;
 			endif
 			
+			if (version < 10102)
+				v10102_UpdateHFSetting(true)
+				v10102_SetCrittersTeammate()
+			endif
 		endif
 		
 		IH_Util.Trace("Finished updates. New version is: " + versionCurrent)
@@ -762,6 +772,65 @@ Function CheckUpdates()
 		IH_UpdateUnsupported.Show(version / 10000.0, versionCurrent / 10000.0)
 	endif
 	version = versionCurrent
+EndFunction
+
+Function v10102_UpdateHFSetting(bool allowReset = false)
+	; IH_Util.Trace("\tv1.1.2: Updating properties on IH_FloraLarnerScript instances")
+	; int aliasCt = IH_FloraLearner.GetNumAliases()
+	; int i = 0
+	; while (i < aliasCT)
+	; 	(IH_FloraLearner.GetNthAlias(i) as IH_FloraLearnerScript).IH_LearnHearthfire = IH_LearnHearthfire
+	; 	i += 1
+	; endwhile
+	
+	; 0xB1987 was added in USSEP v4.2.0, when the relevant fixed was merged, so test for it
+	; Failing that, test whether IHarvestVanillaFixes module is installed
+	if (Game.GetFormFromFile(0xB1987, "Unofficial Skyrim Special Edition Patch.esp") != None \
+	 || Game.GetFormFromFile(0x800, "IHarvestVanillaFixes.esp") != None)
+		IH_Util.Trace("\tv1.1.2: USSEP v4.2.0+ or IHarvestVanillaFixes detected; enabling HearthFire compat setting and resetting flora cache")
+		IH_LearnHearthfire.SetValue(1.0)
+		ClearFloraCaches()
+	endif
+EndFunction
+
+Function v10102_SetCrittersTeammate()
+	IH_Util.Trace("\tv1.1.2: Gathering up all the getter critters...")
+	Form[] allCritters = Utility.CreateFormArray(512, None)
+	int i = 0
+	int last = 0
+	Form tmp
+	while (i < 128)
+		tmp = StandbyGetterCritters[i]
+		if (tmp)
+			allCritters[last] = tmp
+			last += 1
+		endif
+		
+		tmp = StandbyGetterCrittersGT[i]
+		if (tmp)
+			allCritters[last] = tmp
+			last += 1
+		endif
+		
+		tmp = ActiveGetterCritters[i]
+		if (tmp)
+			allCritters[last] = tmp
+			last += 1
+		endif
+		
+		i += 1
+	endwhile
+	IH_Util.Trace("\t\t...SetPlayerTeammate()ing all " + last + " critters...")
+	i = 0
+	IH_GetterCritterScript c
+	while (i < last)
+		c = (allCritters[i] as IH_GetterCritterScript)
+		if (c != None)
+			c.SetPlayerTeammate(true)
+		endif
+		i += 1
+	endwhile
+	IH_Util.Trace("\t...Done.")
 EndFunction
 
 Function SyncNonPersistent()

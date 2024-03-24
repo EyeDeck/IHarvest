@@ -2,17 +2,25 @@ ScriptName IH_Util
 
 ;/ Recursive function that takes a form (Ingredient, FormList or LeveledItem),
 ; and determines whether that form can produce alchemy ingredients /;
-bool Function ProducesIngredient(Form f, bool food) Global
+bool Function ProducesIngredient(Form f, bool food, bool hf) Global
 	Form[] seen = new Form[128]
-	return ProducesIngredientInternal(f, food, seen, 0)
+	return ProducesIngredientInternal(f, food, hf, seen)
 EndFunction
 
 ;/ Realized I had to add an infinite recursion check, otherwise Bad Things could happen;
 ; best way to do that was to make the original function into a proxy /;
-bool Function ProducesIngredientInternal(Form f, bool food, Form[] seen, int seenEnd) Global
-;	IH_Util.Trace("Examining Form " + f)
-	if (seen.RFind(f, seenEnd) >= 0)
-		DEBUG.Trace("IHarvest: Skipped a circular FormList/LeveledItem " + f + " in ProducesIngredient() - you may want to investigate this as this may cause crashes elsewhere!", 1)
+bool Function ProducesIngredientInternal(Form f, bool food, bool hf, Form[] seen) Global
+	int last
+	; IH_Util.Trace("Examining Form " + f)
+	if (f == None)
+		IH_Util.Trace("None form passed to ProducesIngredientInternal? Weird.", 1)
+		return false
+	endif
+	
+	if (seen.Find(f) >= 0)
+		string s = "IHarvest: Skipped a circular FormList/LeveledItem " + f + " in ProducesIngredient() - you may want to investigate this as this may cause crashes elsewhere!"
+		DEBUG.Trace(s, 1)
+		IH_Util.Trace(s, 1)
 		return false
 	endif
 	
@@ -22,15 +30,31 @@ bool Function ProducesIngredientInternal(Form f, bool food, Form[] seen, int see
 	
 	if (food)
 		Potion fP = f as Potion
-		if (fP && fP.IsFood())
-			return true
+		if (fP)
+			if (fP.IsFood())
+				return true
+			else
+				return false
+			endif
+		endif
+	endif
+	
+	if (hf)
+		BYOHHiddenObjectScript ho = f as BYOHHiddenObjectScript
+		if (ho)
+			if (ho.itemToAddPotion && ProducesIngredientInternal(ho.itemToAddPotion, food, hf, seen))
+				return true
+			elseif (ho.itemToAddIngredient && ProducesIngredientInternal(ho.itemToAddIngredient, food, hf, seen))
+				return true
+			endif
+			return false
 		endif
 	endif
 	
 	LeveledItem fLI = f as LeveledItem
 	if (fLI != None)
-		seen[seenEnd] = f
-		seenEnd += 1
+		last = seen.Find(None)
+		seen[last] = f
 		
 		if (fLI.GetChanceNone() >= 100)
 			; This probably never actually comes up, but might as well check for it anyway
@@ -39,22 +63,23 @@ bool Function ProducesIngredientInternal(Form f, bool food, Form[] seen, int see
 		int ct = fLI.GetNumForms()
 		int i = 0
 		while (i < ct)
-			if (fLI.GetNthCount(i) > 0 && ProducesIngredientInternal(fLI.GetNthForm(i), food, seen, seenEnd))
+			if (fLI.GetNthCount(i) > 0 && ProducesIngredientInternal(fLI.GetNthForm(i), food, hf, seen))
 				return true
 			endif
 			i += 1
 		endwhile
 		return false
 	endif
+	
 	FormList fFL = f as FormList
 	if (fFL != None)
-		seen[seenEnd] = f
-		seenEnd += 1
+		last = seen.Find(None)
+		seen[last] = f
 		
 		int ct = fFL.GetSize()
 		int i = 0
 		while (i < ct)
-			if (ProducesIngredientInternal(fFL.GetAt(i), food, seen, seenEnd))
+			if (ProducesIngredientInternal(fFL.GetAt(i), food, hf, seen))
 				return true
 			endif
 			i += 1
@@ -98,6 +123,9 @@ EndFunction
 float[] Function GetClosestPointAtRadius(float startX, float startY, float startZ, float targetX, float targetY, float targetZ, float radius, float distance = -1.0) Global
 	if (distance < 0.0)
 		distance = IH_Util.GetObjectDistance(startX, startY, startZ, targetX, targetY, targetZ)
+	endif
+	if (distance <= 0.0)
+		distance = 1.0 ; failsafe
 	endif
 	float[] out = new float[4]
 	
