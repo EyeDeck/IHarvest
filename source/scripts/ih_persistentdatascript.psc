@@ -102,7 +102,7 @@ bool busy = false
 int Property version Auto
 
 int Function GetVersion()
-	return 010204 ; 01.02.04
+	return 010205 ; 01.02.05
 EndFunction
 
 Event OnInit()
@@ -142,7 +142,7 @@ Event OnUpdate()
 	endif
 	
 	(self.GetAlias(thisIndex) as ReferenceAlias).Clear()
-	;~_Util.Trace("IGN: Cleared ignored object from cache ID " + thisIndex)
+	; IH_Util.Trace("IGN: Cleared ignored object from cache ID " + thisIndex)
 EndEvent
 
 Function OnGameLoad()
@@ -152,6 +152,8 @@ Function OnGameLoad()
 	if (IH_SearchMode.GetValue() == 2.0)
 		SkyPal_References.Change_Collision_Layer_Type(IH_Util.DowncastCritterArr(ActiveGetterCritters), 42)
 	endif
+	
+	ResyncPointerHolders()
 	; DumpFormList(IH_LearnedTypes)
 	; SyncNonPersistent()
 EndFunction
@@ -178,7 +180,7 @@ Function AddIgnoredObject(ObjectReference thing)
 	endif
 	
 	(self.GetAlias(thisIndex) as ReferenceAlias).ForceRefTo(thing)
-	;~_Util.Trace("IGN: Forced object " + thing + " into ignored alias ID " + thisIndex)
+	; IH_Util.Trace("IGN: Forced object " + thing + " into ignored alias ID " + thisIndex)
 	RegisterForSingleUpdate(cacheDecayRate)
 EndFunction
 
@@ -245,33 +247,47 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 		; Filter for refs whose base types are in IH_LearnedTypes
 		refs = skypal_references.Filter_Bases_Form_List(refs, IH_LearnedTypes, "")
 		
+		; Filter for refs within IH_CurrentSearchRadius units of caster
+		refs = skypal_references.Filter_Distance(refs, IH_CurrentSearchRadius.GetValue(), caster, "<")
+		
 		; Filter disabled refs
 		refs = skypal_references.Filter_Enabled(refs, "")
 		
 		; Filter deleted refs
 		refs = skypal_references.Filter_Deleted(refs, "!")
 		
-		; Filter for refs within IH_CurrentSearchRadius units of caster
-		refs = skypal_references.Filter_Distance(refs, IH_CurrentSearchRadius.GetValue(), caster, "<")
-		
-		Keyword[] kywds = new Keyword[1]
-		kywds[0] = IH_IgnoreObject
-		; Filter for refs without IH_IgnoreObject
-		refs = skypal_references.Filter_Keywords(refs, kywds, "!|")
+		; IH_Util.Trace("Found these things:")
+		; IH_Util.DumpObjectArray(refs)
 		
 		Actor[] a = new Actor[1]
 		a[0] = casterA
 		refs = skypal_references.Filter_Potential_Thieves(refs, a, "!|")
+		
+		; IH_Util.Trace("Filtered for thieves, redumping")
+		; IH_Util.DumpObjectArray(refs)
+		
+		Keyword[] kywds = new Keyword[1]
+		kywds[0] = IH_IgnoreObject
+		; Filter for refs without IH_IgnoreObject
+		; IH_Util.Trace("\nBefore keyword filter: ")
+		; IH_Util.DumpObjectArray(refs)
+		refs = skypal_references.Filter_Keywords(refs, kywds, "!|")
+		; IH_Util.Trace("\nAfter keyword filter: ")
+		; IH_Util.DumpObjectArray(refs)
+		; IH_Util.Trace("\n")
 		
 		; Sort by closer to caster
 		refs = skypal_references.Sort_Distance(refs, caster, "<")
 		
 		; IH_Util.Trace("After all filters with len:" + refs.Length + "\n" + refs)
 		
+		; IH_Util.Trace("Filling and running extra filtering, " + refs[i] + ", " + casterA + "," + i + "," + FinderThreadResultsInts + "," + FinderThreadResultsRefs)
+		
 		i = 0
 		int len = refs.Length
 		while (i < workerCount && i < len)
 			ObjectReference r = None
+			FinderThreadResultsInts[i] = -1
 			IH_FloraFinderWorkersSkypal[i].FillAndRun(refs[i], casterA, i, FinderThreadResultsRefs, FinderThreadResultsInts)
 			i += 1
 		endwhile
@@ -282,6 +298,8 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 			FinderThreadResultsRefs[i] = None
 			i += 1
 		endwhile
+		
+		; IH_Util.Trace("Filled and ran extra filtering, " + refs[i] + ", " + casterA + "," + i + "," + FinderThreadResultsInts + "," + FinderThreadResultsRefs)
 	elseif (searchMode == 1 && caster == PlayerRef) ; Start Mode (only works for player caster)
 		IH_Util.Trace("Start()ing search quest...waiting for worker threads to finish. ")
 		finderQuest = IH_FloraFinderStart
@@ -380,6 +398,8 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 	;	IH_Util.Trace("finishedWorkers:" + finishedWorkers)
 		Utility.WaitMenuMode(0.05) ; ~3 frames at 60fps
 		i += 1 ; failsafe
+		
+		; IH_Util.Trace("UNFINISHED Results array:\n\t\t" + FinderThreadResultsInts + "\n\t\t" + FinderThreadResultsRefs)
 	endwhile
 	
 	;~_Util.Trace("Workers finished. FoundFlora:" + FoundFlora)
@@ -387,7 +407,7 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 		finderQuest.Stop()
 	endif
 	
-	; IH_Util.Trace("Results array:\n\t\t" + FinderThreadResultsRefs + "\n\t\t" + FinderThreadResultsInts)
+	; IH_Util.Trace("Results array:\n\t\t" + FinderThreadResultsInts + "\n\t\t" + FinderThreadResultsRefs)
 	
 	ObjectReference[] toReturn = new ObjectReference[8] ; workerCount
 	i = 0
@@ -945,37 +965,47 @@ Function DeleteGetterCritters()
 	
 	int orphans = 0
 	if (IH_SearchMode.GetValue() == 2.0)
-		ObjectReference[] refs = skypal_references.All()
-		refs = skypal_references.Filter_Bases_Form_List(refs, IH_SpawnableBase_01, "")
+	;	IH_Util.Trace("\t\tRunning skypal_references.All()...")
+	;	ObjectReference[] refs = skypal_references.All()
+	;	IH_Util.Trace("\t\tFiltering array (len " + refs.length + ") by FormList...")
+	;	refs = skypal_references.Filter_Bases_Form_List(refs, IH_SpawnableBase_01, "")
+	;	IH_Util.Trace("\t\tFiltering array (len " + refs.length + ") deleted...")
+		
+		float time2 = Utility.GetCurrentRealTime()
+		
+		IH_Util.Trace("\t\tRunning skypal_references.All_Filter_Bases_Form_List(IH_SpawnableBase_01, \"\")...")
+		ObjectReference[] refs = skypal_references.All_Filter_Bases_Form_List(IH_SpawnableBase_01, "")
+		IH_Util.Trace("\t\tFiltering array (len " + refs.length + ") deleted...")
 		refs = skypal_references.Filter_Deleted(refs, "!")
 		
-		i = refs.length - 1
-		IH_Util.Trace("Found " + i + " spawned IHarvest objects via SkyPal--deleting...")
+		i = refs.length
+		IH_Util.Trace("\tFound " + i + " spawned IHarvest objects via SkyPal in " + (Utility.GetCurrentRealTime() - time2) + "s--deleting...")
+		i -= 1
 		while (i >= 0)
 			ObjectReference thing = refs[i]
 			if (thing != None)
 				Form base = thing.GetBaseObject()
 				if (IH_SpawnableBase_01.HasForm(base)) ; just to be safe
-					IH_Util.Trace("\t...found spawned thing " + thing + " of type " + base + " to delete...")
+					IH_Util.Trace("\t\t...found spawned thing " + thing + " of type " + base + " to delete...")
 					thing.Disable()
 					IH_Util.QuarantineObject(thing)
 					thing.Delete()
 					orphans += 1
 				else
-					IH_Util.Trace("\t...skipped thing " + thing)
+					IH_Util.Trace("\t\t...skipped thing " + thing)
 				endif
 			endif
 			i -= 1
 		endwhile
 	else
-		IH_Util.Trace("Looking for orphaned objects to delete...")
+		IH_Util.Trace("\tLooking for orphaned objects to delete...")
 		bool keepDeleting = true
 		while (keepDeleting)
 			ObjectReference thing = Game.FindClosestReferenceOfAnyTypeInListFromRef(IH_SpawnableBase_01, PlayerRef, 128000.0)
 			if (thing == None)
 				keepDeleting = false
 			else
-				IH_Util.Trace("\t...found unreferenced spawned thing " + thing + " to delete...")
+				IH_Util.Trace("\t\t...found unreferenced spawned thing " + thing + " to delete...")
 				thing.Disable()
 				IH_Util.QuarantineObject(thing)
 				thing.Delete()

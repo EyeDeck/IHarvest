@@ -43,6 +43,7 @@ Function FillAndRun(ObjectReference object, Actor casterRef, int i, ObjectRefere
 	ErrorArray = intArray
 	; arraysFilled = true
 	RegisterForSingleUpdate(0.0)
+	; IH_Util.Trace(self + " (" + i + ") set LastObject to " + object)
 EndFunction
 
 Event OnUpdate()
@@ -62,16 +63,17 @@ EndEvent
 
 Function DoExtraFiltering(ObjectReference this, Actor casterRef, int i, ObjectReference[] rA, int[] iA, Actor PlayerRef, ActorBase Player, bool ignoreOwnership) Global
 	; IH_Util.Trace(" index " + i + " filled with " + this + ";\t\tiA=" + iA + ",\t\trA=" + rA)
-
+	
+	rA[i] = this
+	; IH_Util.Trace(" set results index " + i + " to " + this + ";\t\tiA=" + iA + ",\t\trA=" + rA)
+	
 	if (this == None)
 	;	IH_Util.Trace("\t" + self + " GetReference() is null.")
-		; UpdateOwner(None, 1, i, rA, iA)
-		rA[i] = this
 		iA[i] = 1
 		return
 	endif
-	Form base = this.GetBaseObject()
 	
+	Form base = this.GetBaseObject()
 	; IH_Util.Trace("\t" + self + " filled with ref " + this + ", base " + base)
 	
 	; test if activation is blocked (this is probably almost never an issue,
@@ -82,7 +84,6 @@ Function DoExtraFiltering(ObjectReference this, Actor casterRef, int i, ObjectRe
 		; the unofficial patch version of DLC1TrapPoisonBloom is installed
 	elseif (this.IsActivationBlocked())
 		; UpdateOwner(this, 2, i, rA, iA)
-		rA[i] = this
 		iA[i] = 2
 		return
 	endif
@@ -90,7 +91,6 @@ Function DoExtraFiltering(ObjectReference this, Actor casterRef, int i, ObjectRe
 	;;Story manager should preclude these
 	;if (this.IsDisabled() || this.IsDeleted())
 	;	; UpdateOwner(this, 3, i, rA, iA)
-	;	rA[i] = this
 	;	iA[i] = 3
 	;	return
 	;endif
@@ -99,97 +99,32 @@ Function DoExtraFiltering(ObjectReference this, Actor casterRef, int i, ObjectRe
 	bool isTree = (base as TreeObject) != None
 	if (((isTree || base as Flora) && this.IsHarvested()) || this.GetState() == "harvested")
 		; UpdateOwner(this, 4, i, rA, iA)
-		rA[i] = this
 		iA[i] = 4
 		return
 	endif
 	
 	if (ignoreOwnership)
-		rA[i] = this
 		iA[i] = 0
 		return
 	endif
 	
-	; now test if taking object would be stealing
+	; finally, test if taking object would be stealing
 	
-	; cell inherited ownership checking, first check cell faction ownership (most common)
-	; Actor casterRef
 	ActorBase casterBase
-	Cell thisCell = this.GetParentCell()
-	Faction thisCellFaction = thisCell.GetFactionOwner()
-	if (thisCellFaction != None)
-		; casterRef = Caster.GetReference() as Actor
-		if (!casterRef.IsInFaction(thisCellFaction))
-			; UpdateOwner(this, 6, i, rA, iA)
-			rA[i] = this
-			iA[i] = 6
-			return
-		endif
+	if (casterRef == PlayerRef)
+		casterBase = Player
+	else
+		casterBase = casterRef.GetBaseObject() as ActorBase
 	endif
 	
-	; continue cell inherited ownership, check cell actor owner
-	ActorBase thisCellOwner = thisCell.GetActorOwner()
-	if (thisCellOwner != None)
-		; if (casterRef == None)
-		;	casterRef = Caster.GetReference() as Actor
-		; endif
-		if (casterRef == PlayerRef)
-			; skip GetBaseObject() on the player ref, which would be very slow
-			casterBase = Player
-		else
-			casterBase = casterRef.GetBaseObject() as ActorBase
-		endif
-		if (thisCellOwner != casterBase)
-			; UpdateOwner(this, 6, i, rA, iA)
-			rA[i] = this
-			iA[i] = 6
-			return
-		endif
-	endif
+	; IH_Util.Trace("AllowedToTake? " + this + ", " + casterRef + ", " + casterBase + " = " + IH_Util.AllowedToTake(this, casterRef, casterBase))
 	
-	if (!isTree)
-		; trees cannot have per-object ownership data set, so we can skip the rest of the checks
-		
-		; now check if the item is owned by the caster's faction
-		Faction factionOwner = this.GetFactionOwner()
-		if (factionOwner != None && factionOwner != thisCellFaction) ; thisCellFaction already tested
-			; if (casterRef == None)
-			;	casterRef = Caster.GetReference() as Actor
-			; endif
-			if (!casterRef.IsInFaction(factionOwner))
-				; UpdateOwner(this, 5, i, rA, iA)
-				rA[i] = this
-				iA[i] = 5
-				return
-			endif
-		endif
-		
-		; finally check if the item is owned by the caster directly
-		ActorBase owner = this.GetActorOwner()
-		if (owner != None)
-			; if (casterRef == None)
-			;	casterRef = Caster.GetReference() as Actor
-			; endif
-			if (casterBase == None)
-				if (casterRef == PlayerRef)
-					casterBase = Player
-				else
-					casterBase = casterRef.GetBaseObject() as ActorBase
-				endif
-			endif
-			if (owner != casterBase)
-				; UpdateOwner(this, 5, i, rA, iA)
-				rA[i] = this
-				iA[i] = 5
-				return
-			endif
-		endif
-	endif
-	
-	; This looks like a valid object, so update our persistent data script and finish
-	; UpdateOwner(this, 0)
 	rA[i] = this
-	iA[i] = 0
+	if (IH_Util.AllowedToTake(this, casterRef, casterBase))
+		iA[i] = 0
+	else
+		iA[i] = 5
+	endif
 EndFunction
 
 ; Decided to inline this since it only runs 2 very short lines at this point anyway

@@ -97,16 +97,16 @@ Event OnEffectStart(Actor akTarget, Actor akCaster)
 		else
 			staffHand = true
 		endif
+		baseCost = IH_StaffDrainPerSpawn.GetValue()
 	else
 		if (caster.GetAnimationVariableBool("IsCastingDual"))
 			dualCasting = true
 		endif
 		baseCost = IH_MagickaDrainPerSpawn.GetValue()
-		
-		alterationMod = (100.0 - caster.GetActorValue("AlterationMod")) / 100
-		if (alterationMod < MinSpellReduction)
-			alterationMod = MinSpellReduction
-		endif
+	endif
+	alterationMod = (100.0 - caster.GetActorValue("AlterationMod")) / 100
+	if (alterationMod < MinSpellReduction)
+		alterationMod = MinSpellReduction
 	endif
 	
 	if (IH_InheritGreenThumb.GetValue() > 0.0 && caster.HasPerk(GreenThumb))
@@ -146,7 +146,7 @@ Event OnEffectStart(Actor akTarget, Actor akCaster)
 	
 ;	if (allowReg)
 	RegisterForSingleUpdate(delay / usDivisor)
-	;~_Util.Trace("casting; delay:" + delay + " minDelay:" + minDelay + " accel:" + accel + " radius: " + radius + " maxRadius:" + maxRadius)
+	IH_Util.Trace("Casting by " + caster + ", alt=" + alt + ", alch=" + alch + ", delay=" + delay + ", minDelay=" + minDelay + ", accel=" + accel + ", radius=" + radius + ", maxRadius=" + maxRadius + ", dual=" + dualCasting)
 	DoCast()
 ;	endif
 EndEvent
@@ -188,16 +188,14 @@ Event OnUpdate()
 EndEvent
 
 Function DoCast()
-	float cost
+	float cost = baseCost*alterationMod
 	if (IsStaff)
-		cost = IH_StaffDrainPerSpawn.GetValue()
 		if ((staffHand && caster.GetActorValue("LeftItemCharge") < cost) || (!staffHand && caster.GetActorValue("RightItemCharge") < cost))
 			; caster.RemoveSpell(IH_HarvestStaffAbility)
 			self.Dispel()
 			return
 		endif
 	else
-		cost = baseCost*alterationMod
 		if (caster.GetActorValue("Magicka") < cost)
 			caster.InterruptCast()
 			return
@@ -255,7 +253,10 @@ Function DoCast()
 	endif
 	
 	if (caster == PlayerRef)
-		Game.AdvanceSkill("Alteration", IH_CastExp.GetValue())
+		float exp = IH_CastExp.GetValue()
+		if (exp > 0.0)
+			Game.AdvanceSkill("Alteration", IH_CastExp.GetValue())
+		endif
 		;~_Util.Trace("Raised Alteration by " + SkillAdvancement)
 	endif
 	
@@ -306,15 +307,19 @@ ObjectReference Function GetHarvestable()
 EndFunction
 
 bool Function TryCacheHarvestables()
+	; IH_Util.Trace("Called TryCacheHarvestables--getting things from CacheHarvestables()")
 	int i = CacheHarvestables()
 	if (i < 0)
 		return false
 	endif
+	
+	; IH_Util.Trace("Got " + i + " things back from CacheHarvestables():")
+	; IH_Util.DumpObjectArray(cachedFlora)
+	
 	cachedFloraCount = i
 	nextIndex = 0
 	return true
 EndFunction
-
 
 int Function CacheHarvestables()
 	IH_CurrentSearchRadius.SetValue(radius as float)

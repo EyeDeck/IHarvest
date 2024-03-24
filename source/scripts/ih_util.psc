@@ -268,3 +268,45 @@ Function DumpFormList(FormList f) Global
 	IH_Util.Trace("Finished dumping " + f)
 EndFunction
 
+Function DumpObjectArray(ObjectReference[] refs) Global
+	int len = refs.length
+	IH_Util.Trace("Dumping an array of size " + len)
+	int i = 0
+	while (i < len)
+		IH_Util.Trace("\t" + i + ": " + refs[i])
+		i += 1
+	endwhile
+	IH_Util.Trace("Finished dumping array")
+EndFunction
+
+bool Function AllowedToTake(ObjectReference object, Actor taker, ActorBase base) Global
+	; annoyingly simplified, and doesn't take all cases into account because the ownership
+	; system is extremely convoluted and only some parts are exposed to Papyrus
+	
+	ActorBase owner = object.GetActorOwner()
+	if (owner != None)
+		; IH_Util.Trace("\t\t\tOwnership check of " + object + " for " + taker + "/" + base + " for direct owner " + owner == base)
+		return owner == base
+	endif
+	
+	Faction factionOwner = object.GetFactionOwner()
+	if (factionOwner != None)
+		; IH_Util.Trace("\t\t\tOwnership check of " + object + " for " + taker + "/" + base + " for object faction " + taker.IsInFaction(factionOwner) + " owner=" + owner + ", faction=" + factionOwner + " value=" + object.GetBaseObject().GetGoldValue())
+		return taker.IsInFaction(factionOwner)
+	endif
+	
+	Cell thisCell = object.GetParentCell()
+	owner = thisCell.GetActorOwner()
+	if (owner != None)
+		; IH_Util.Trace("\t\t\tOwnership check of " + object + " for " + taker + "/" + base + " for cell owner " + owner == base)
+		return owner == base
+	endif
+	
+	factionOwner = thisCell.GetFactionOwner()
+	if (factionOwner != None)
+		; IH_Util.Trace("\t\t\tOwnership check of " + object + " for " + taker + "/" + base + " for cell faction " + taker.IsInFaction(factionOwner))
+		return taker.IsInFaction(factionOwner)
+	endif
+	
+	return true
+EndFunction
