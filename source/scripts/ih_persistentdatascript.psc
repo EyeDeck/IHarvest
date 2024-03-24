@@ -270,14 +270,20 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 			i += 1
 		endwhile
 	elseif (caster == PlayerRef && searchMode == 1)
-		; IH_Util.Trace("Starting player-specific quest the old-fashioned way...waiting for worker threads to finish.")
+		IH_Util.Trace("Start()ing search quest...waiting for worker threads to finish. ")
 		finderQuest = IH_FloraFinderStart
-		if (finderQuest.Start() == false && finderQuest.IsRunning())
-			finderQuest.Stop()
-			if (finderQuest.Start())
-				IH_Util.Trace("Failed to start " + finderQuest + ", was already running, and failed a restart!", 2)
+		if (finderQuest.Start())
+			; pass
+		else
+			if (finderQuest.IsRunning())
+				finderQuest.Stop()
+				if (finderQuest.Start())
+					IH_Util.Trace("Failed to start " + finderQuest + ", was already running, and failed a restart!", 2)
+				else
+					IH_Util.Trace(finderQuest + " was already running, but successfully forcibly restarted!", 1)
+				endif
 			else
-				IH_Util.Trace(finderQuest + " was already running, but successfully forcibly restarted!", 1)
+				IH_Util.Trace(finderQuest + " failed to start, and is not already running! This should never happen.", 1)
 			endif
 		endif
 	else

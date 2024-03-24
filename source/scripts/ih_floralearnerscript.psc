@@ -88,6 +88,8 @@ bool Function ShouldLearnBase(Form base, bool learnFood, bool learnHF) global
 			return false
 		endif
 	endif
+	
+	return false
 EndFunction
 
 bool Function ShouldLearnActivator(ObjectReference this, Form base, bool learnFood, bool learnHF) global
