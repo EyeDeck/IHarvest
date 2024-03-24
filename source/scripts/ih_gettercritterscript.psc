@@ -614,6 +614,10 @@ Function Cleanup()
 	else
 		IH_Util.Trace(self + " Skipped return to cache becasue \"active\" is false, which would likely have caused cache confusion.", 1)
 	endif
+	
+	; the game seems to occasionally ignore the DisableNoWait(),
+	; so do it again just to be sure
+	Disable() 
 EndFunction
 
 Function Delete()

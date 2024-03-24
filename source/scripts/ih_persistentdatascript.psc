@@ -606,6 +606,10 @@ bool Function DedupeAndCleanIndex(IH_GetterCritterScript[] arr, string arrName, 
 	endif
 
 	st = a.GetState()
+	if (st == "Done")
+		a.Disable()
+	endif
+	
 	if (st == "Deleted")
 		a.Delete()
 		arr[i] = None

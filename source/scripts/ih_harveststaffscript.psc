@@ -11,7 +11,7 @@ Event OnEquipped(Actor akActor)
 		akActor.UnequipItem(left, false, false)
 		return
 	endif
-	akActor.AddSpell(IH_StaffCastMonitorAbility)
+	akActor.AddSpell(IH_StaffCastMonitorAbility, false)
 EndEvent
 
 Event OnUnequipped(Actor akActor)
