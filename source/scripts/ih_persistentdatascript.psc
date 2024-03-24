@@ -665,7 +665,7 @@ Function PrintCritterArray(IH_GetterCritterScript[] arr)
 EndFunction
 
 Function CheckUpdates()
-	int versionCurrent = 010004 ; 01.00.04
+	int versionCurrent = 010005 ; 01.00.05
 	
 	Debug.Trace(self + " Checking if SKSE is installed (this may error)...")
 	IH_Util.Trace("Checking if SKSE is installed...")
@@ -705,7 +705,9 @@ Function CheckUpdates()
 			StandbyGetterCrittersGT = new IH_GetterCritterScript[128]
 		endif
 		IH_Util.Trace("Finished updates. New version is: " + versionCurrent)
-		IH_Update.Show(version / 10000.0, versionCurrent / 10000.0)
+		if (version != 0) ; don't show on initial install
+			IH_Update.Show(version / 10000.0, versionCurrent / 10000.0)
+		endif
 	else ;if (versionCurrent < version), i.e. rollback
 		IH_UpdateUnsupported.Show(version / 10000.0, versionCurrent / 10000.0)
 	endif

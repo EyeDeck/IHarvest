@@ -1,6 +1,7 @@
 Scriptname IH_FloraFinderWorkerScript extends ReferenceAlias
 
 IH_PersistentDataScript Property IH_PersistentData Auto
+Race Property IH_GetterCritterRace Auto
 
 Event OnInit()
 	ObjectReference this = GetReference()
@@ -31,7 +32,8 @@ Event OnInit()
 		return
 	endif
 	; test if taking object would be stealing
-	if (this.GetFactionOwner() != None || this.GetActorOwner() != None)
+	ActorBase owner = this.GetActorOwner()
+	if (this.GetFactionOwner() != None || (owner != None && owner.GetRace() != IH_GetterCritterRace))
 		; Interacting with this might be stealing, so leave it alone
 		UpdateOwner(this, 5)
 		return

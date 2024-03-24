@@ -259,21 +259,28 @@ State Init
 			DisableNoWait()
 		endif
 		
-		if (IH_NotificationSpam.GetValue())
-			; can't just use RemoveAllItems because I want notification messages for the player
-			; (RemoveAllItems doesn't have a silent parameter until FO4)
-			int itemct = GetNumItems()
-			while (itemct > 0)
-				itemct -= 1
-				Form item = GetNthForm(itemct)
-				;IH_Util.Trace("thing:" + item)
-				;RemoveItem(GetNthForm(itemct), 65535, false, Caster)
-				Caster.AddItem(item, GetItemCount(item), false)
-			endwhile
-			RemoveAllItems(None, false, true)
-		else
-			RemoveAllItems(Caster, true, true)
-		endif
+		bool silent = IH_NotificationSpam.GetValue() <= 0.0
+		; can't just use RemoveAllItems because I want notification messages for the player
+		; (RemoveAllItems doesn't have a silent parameter until FO4)
+		int itemct = GetNumItems()
+		while (itemct > 0)
+			itemct -= 1
+			Form item = GetNthForm(itemct)
+			if (item as ObjectReference)
+				; This is very slightly faster as we don't have to wait in the caster's queue.
+				; More importantly, it keeps us from accidentally deleting a persistent reference in
+				; case a quest or something is using it. It never displays an Added message, though.
+				RemoveItem(item, 65535, silent, Caster)
+			else
+				Caster.AddItem(item, GetItemCount(item), silent)
+			endif
+				
+			;IH_Util.Trace("thing:" + item)
+		endwhile
+		
+		; the last block is actually duping anything non-persistent, so the inventory
+		; needs to be manually cleaned before returning to the cache
+		RemoveAllItems(None, false, true)
 		
 		Cleanup()
 	EndEvent
