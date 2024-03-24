@@ -246,3 +246,25 @@ Function SetIntArray(int[] ints, int value) Global
 		i -= 1
 	endwhile
 EndFunction
+
+ObjectReference[] Function DowncastCritterArr(IH_GetterCritterScript[] g) Global
+	ObjectReference[] r = new ObjectReference[128]
+	int i = 0
+	while (i < 128)
+		r[i] = g[i]
+		i += 1
+	endwhile
+	return r
+EndFunction
+
+Function DumpFormList(FormList f) Global
+	int size = f.GetSize()
+	IH_Util.Trace("Dumping FormList " + f + " of size " + size)
+	int i = 0
+	while (i < size)
+		IH_Util.Trace("\t" + i + ": " + f.GetAt(i))
+		i += 1
+	endwhile
+	IH_Util.Trace("Finished dumping " + f)
+EndFunction
+

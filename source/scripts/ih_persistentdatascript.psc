@@ -13,7 +13,8 @@ Message Property IH_SKSEMismatch			Auto
 Message Property IH_Update					Auto
 Message Property IH_UpdateUnsupported		Auto
 Message Property IH_StoryManagerHighLoad	Auto
-Message Property IH_doticuLibNotWorking		Auto
+Message Property IH_SkyPalNotWorking		Auto
+Message Property IH_SkyPalOutOfDate			Auto
 
 Message Property IH_StatsDisplay			Auto
 Message Property IH_OperationFinishedCache	Auto
@@ -99,7 +100,7 @@ bool busy = false
 int Property version Auto
 
 int Function GetVersion()
-	return 010200 ; 01.02.00
+	return 010201 ; 01.02.01
 EndFunction
 
 Event OnInit()
@@ -143,6 +144,10 @@ EndEvent
 Function OnGameLoad()
 {Called by other code when the player loads a game}
 	CheckUpdates()
+	
+	if (IH_SearchMode.GetValue() == 2.0)
+		SkyPal_References.Change_Collision_Layer_Type(IH_Util.DowncastCritterArr(ActiveGetterCritters), 42)
+	endif
 	; DumpFormList(IH_LearnedTypes)
 	; SyncNonPersistent()
 EndFunction
@@ -223,7 +228,7 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 		ObjectReference[] refs =  skypal_references.Grid()
 		IH_Util.Trace("skypalFetchGrid end")
 		if (refs as bool == false)
-			IH_doticuLibNotWorking.Show()
+			IH_SkyPalNotWorking.Show()
 			busy = false
 			return new ObjectReference[1]
 		endif
@@ -1005,7 +1010,7 @@ Function CheckUpdates()
 				v10102_SetCrittersTeammate()
 			endif
 			
-			if (version < 10200)
+			if (version < 10201)
 				v10200_SetDefaultSearchMode()
 			endif
 		endif
@@ -1079,26 +1084,27 @@ Function v10102_SetCrittersTeammate()
 	IH_Util.Trace("\t...Done.")
 EndFunction
 
-Function DumpFormList(FormList f)
-	int size = f.GetSize()
-	IH_Util.Trace("Dumping FormList " + f + " of size " + size)
-	int i = 0
-	while (i < size)
-		IH_Util.Trace("\t" + i + ": " + f.GetAt(i))
-		i += 1
-	endwhile
-	IH_Util.Trace("Finished dumping " + f)
-EndFunction
-
 Function v10200_SetDefaultSearchMode()
-	Debug.Trace(self + " Checking if doticu's skypal library is installed (this may error)")
-	if (skypal.Has_DLL())
-		IH_Util.Trace("Set search mode to 2.0 (skypal)")
+	if (VerifySkypalVersion())
+		IH_Util.Trace("Set search mode to 2.0 (SkyPal)")
 		IH_SearchMode.SetValue(2.0)
 	elseif (IH_SearchMode.GetValue() < 0.0)
 		IH_Util.Trace("Set search mode to 0.0 (Story Manager events)")
 		IH_SearchMode.SetValue(0.0)
 	endif
+EndFunction
+
+bool Function VerifySkypalVersion()
+	Debug.Trace(self + " Checking if doticu's SkyPal library is installed (this may error)")
+	if (SkyPal.Has_DLL() == false)
+		IH_SkyPalNotWorking.Show()
+		return false
+	endif
+	if (SkyPal.Has_Version(1,0,1, "<"))
+		IH_SkyPalOutOfDate.Show()
+		; deliberately return true anyway
+	endif
+	return true
 EndFunction
 
 ;/ =========================== \;

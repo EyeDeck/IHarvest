@@ -11,6 +11,7 @@ Package Property IH_GetterCritterIdle Auto
 
 GlobalVariable Property IH_NotificationSpam Auto
 GlobalVariable Property IH_OffsetReturnPoint Auto
+GlobalVariable Property IH_SearchMode Auto
 
 Actor Property Caster Auto
 ObjectReference Property Target Auto
@@ -95,6 +96,12 @@ State Init
 		;~_Util.Trace(self + "Took " + i + " loops for 3d to load")
 		SpawnExplosion.MoveToNode(self, "Witchlight Body Lag")
 		; IH_Util.Trace(SpawnExplosion.Is3dLoaded())
+		
+		if (IH_SearchMode.GetValue() == 2.0)
+			ObjectReference[] r = new ObjectReference[1]
+			r[0] = self
+			SkyPal_References.Change_Collision_Layer_Type(r, 42)
+		endif
 		
 		; IH_Util.Trace("anim:" + PlaceAtMe(IH_FXGetterCritterSpawnPoof).)
 		IH_FXGetterCritterMeshEffect.Play(self, -1)
