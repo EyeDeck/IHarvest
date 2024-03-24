@@ -241,7 +241,9 @@ Function DoCast()
 	; set up the critter's state and start its thread asynchronously (it's autonomous after this point)
 	if (!getterCritter.SetTargets2(caster, thing, speed))
 		; don't let the critter leak in case it's in a state where it ignores SetTargets
+		IH_Util.Trace("Grabbed critter in incorrect state; bailing out of cast: " + getterCritter)
 		IH_PersistentData.ReturnGetterCritter2(getterCritter, hasGreenThumb)
+		return
 	endif
 ;	IH_Util.Trace("Set critter's targets: " + caster + ", " + thing)
 	

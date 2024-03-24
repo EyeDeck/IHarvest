@@ -74,11 +74,11 @@ State Init
 		
 		int i = 0
 		SpawnExplosion.Enable(false)
-		while (Is3DLoaded() == false && i < 25)
-			Utility.Wait(0.01)
+		while (Is3DLoaded() == false && i < 50)
+			Utility.Wait(0.02)
 			i += 1
 		endWhile
-		if (i == 25)
+		if (i == 50)
 			IH_Util.Trace("\t" + self + " 3D never loaded after 25 checks; abandoning spawn attempt and cleaning up", 2)
 			Cleanup()
 			return
