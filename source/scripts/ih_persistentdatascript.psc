@@ -10,6 +10,8 @@ Message Property IH_SKSEMismatch			Auto
 Message Property IH_Update					Auto
 Message Property IH_UpdateUnsupported		Auto
 
+Message Property IH_StatsDisplay			Auto
+
 GlobalVariable Property IH_CritterCap Auto
 GlobalVariable Property IH_SetPlayerNotPushable Auto
 
@@ -401,15 +403,6 @@ bool Function RemoveActiveCritter(IH_GetterCritterScript c)
 	endif
 EndFunction
 
-; old functions that are no longer used, but we need to keep them with the original signature for save compatibility
-IH_GetterCritterScript Function GetGetterCritter(Actor caster)
-	return GetGetterCritter2(caster, false)
-EndFunction
-
-Function ReturnGetterCritter(IH_GetterCritterScript c)
-	ReturnGetterCritter2(c, false)
-EndFunction
-
 ;/ So it turns out that ObjectReference.PathToReference() is bad—really bad, save-corruptingly bad in fact.
 ; Why? Well, it's a latent function that doesn't return until the pathing request has either finished, failed,
 ; or... just, never. Occasionally it simply does not return, ever, and there is absolutely nothing that can
@@ -471,25 +464,6 @@ Function ReturnPathingAlias(int id);, ReferenceAlias a = None)
 		(self.getNthAlias(cacheSize + id) as ReferenceAlias).Clear()
 	endif/;
 	PathingMarkerCheckout[id] = false
-EndFunction
-
-; deprecated because I found out that the array Find "function" isn't even a function, so I can optimize out this function entirely,
-; but left in place in case in case any saved running threads need to use it
-bool Function ReplaceFirstInstance(IH_GetterCritterScript[] arr, IH_GetterCritterScript toFind, IH_GetterCritterScript toReplace) ;, int retries = 3)
-{Deprecated}
-	int i = 0
-	int l = arr.Length
-	IH_GetterCritterScript c
-	while (i < l)
-		c = arr[i]
-		if (c == toFind)
-			arr[i] = toReplace
-			return true
-		endif
-		i += 1
-	endwhile
-	
-	return false
 EndFunction
 
 Function ClearFloraCaches()
@@ -664,8 +638,51 @@ Function PrintCritterArray(IH_GetterCritterScript[] arr)
 	endwhile
 EndFunction
 
+Function TallyCritterStats()
+	int critters
+	int crittersGT
+	
+	float fameCritters
+	float fameCrittersGT
+	
+	float top
+	float current
+	
+	int i = 0
+	while (i < 128)
+		IH_GetterCritterScript c = StandbyGetterCritters[i]
+		if (c)
+			critters += 1
+			current = c.GetActorValueMax("Fame")
+			; IH_Util.Trace(c + " " + c.GetActorValue("Fame") + " " + c.GetBaseActorValue("Fame") + " " + c.GetActorValueMax("Fame"))
+			fameCritters += current
+			
+			if (top < current)
+				top = current
+			endif
+		endif
+		
+		c = StandbyGetterCrittersGT[i]
+		if (c)
+			crittersGT += 1
+			
+			current = c.GetActorValueMax("Fame")
+			fameCrittersGT += current
+			
+			if (top < current)
+				top = current
+			endif
+		endif
+		
+		i += 1
+	endwhile
+	float totalCritters = critters + crittersGT
+	float totalFame = fameCritters + fameCrittersGT
+	IH_StatsDisplay.Show(totalCritters, critters, crittersGT, totalFame, fameCritters, fameCrittersGT, totalFame / totalCritters, top) 
+EndFunction
+
 Function CheckUpdates()
-	int versionCurrent = 010005 ; 01.00.05
+	int versionCurrent = 010006 ; 01.00.06
 	
 	Debug.Trace(self + " Checking if SKSE is installed (this may error)...")
 	IH_Util.Trace("Checking if SKSE is installed...")
@@ -728,4 +745,31 @@ EndState
 
 ; moved to IH_FloraLearnerControllerScript
 Function LearnHarvestables()
+EndFunction
+
+; old functions that are no longer used, but we need to keep them with the original signature for save compatibility
+IH_GetterCritterScript Function GetGetterCritter(Actor caster)
+	return GetGetterCritter2(caster, false)
+EndFunction
+
+Function ReturnGetterCritter(IH_GetterCritterScript c)
+	ReturnGetterCritter2(c, false)
+EndFunction
+
+; deprecated because I found out that the array Find "function" isn't even a function, so I can optimize out this function entirely,
+; but left in place in case in case any saved running threads need to use it
+bool Function ReplaceFirstInstance(IH_GetterCritterScript[] arr, IH_GetterCritterScript toFind, IH_GetterCritterScript toReplace) ;, int retries = 3)
+	int i = 0
+	int l = arr.Length
+	IH_GetterCritterScript c
+	while (i < l)
+		c = arr[i]
+		if (c == toFind)
+			arr[i] = toReplace
+			return true
+		endif
+		i += 1
+	endwhile
+	
+	return false
 EndFunction

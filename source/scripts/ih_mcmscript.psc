@@ -19,6 +19,7 @@ int OIDgt
 int OIDfood
 int OIDspawnDist
 int OIDreturnOffset
+int OIDstats
 
 Event OnPageReset(string a_page)
 	if (a_page == "")
@@ -28,16 +29,19 @@ Event OnPageReset(string a_page)
 		float crittercap = IH_CritterCap.GetValue()
 		OIDcrittercap = AddSliderOption("Max Concurrent Critters", crittercap, "{0}")
 		
-		OIDrecall = AddTextOption("Recall Active Critters", "[ ]")
+		OIDgt = AddToggleOption("Use Green Thumb", IH_InheritGreenThumb.GetValue() as bool)
 		
 		float spawnDist = IH_SpawnDistanceMult.GetValue()
 		OIDspawnDist = AddSliderOption("Spawn Distance Multiplier", spawnDist, "{1}")
 		
-		OIDgt = AddToggleOption("Use Green Thumb", IH_InheritGreenThumb.GetValue() as bool)
-		SetCursorFillMode(TOP_TO_BOTTOM)
+		OIDrecall = AddTextOption("Recall Active Critters", "[ ]")
 		
 		float returnOffset = IH_OffsetReturnPoint.GetValue()
 		OIDreturnOffset = AddSliderOption("Critter Return Distance Offset", returnOffset, "{0}")
+		
+		OIDstats = AddTextOption("Show Critter Stats", "[ ]")
+		
+		SetCursorFillMode(TOP_TO_BOTTOM)
 		
 		AddEmptyOption()
 		
@@ -56,11 +60,14 @@ EndEvent
 
 Event OnOptionSelect(int a_option)
 	if (a_option == OIDclear)
-		SetTextOptionValue(a_option, "[X]", false)
+		SetTextOptionValue(a_option, "[Please close menu]", false)
 		IH_PersistentData.ClearFloraCaches()
 	elseif (a_option == OIDrecall)
-		SetTextOptionValue(a_option, "[X]", false)
+		SetTextOptionValue(a_option, "[Please close menu]", false)
 		IH_PersistentData.RecallAllCritters()
+	elseif (a_option == OIDstats)
+		SetTextOptionValue(a_option, "[Please close menu]", false)
+		IH_PersistentData.TallyCritterStats()
 	elseif (a_option == OIDnspam)
 		ToggleGlobal(IH_NotificationSpam, a_option)
 	elseif (a_option == OIDgt)
@@ -149,7 +156,9 @@ Event OnOptionHighlight(int a_option)
 	elseif (a_option == OIDspawnDist)
 		SetInfoText("Multiplies the distance at which critters will (try to) spawn in front of the caster.\nNegative values will cause critters to spawn behind the caster instead.")
 	elseif (a_option == OIDreturnOffset)
-		SetInfoText("Values above zero will control how close critters will AI pathfind back to the caster before despawning.\nThis can help reduce the frequency of critters bumping into the caster, though AI pathfinding still tends to be unpredictable.\n64 units = 1 yard")
+		SetInfoText("Values above zero will control how close critters will AI pathfind back to the caster before despawning.\nThis can help reduce how often critters bump the caster, though AI pathfinding still tends to be unpredictable.\n64 units = 1 yard")
+	elseif (a_option == OIDstats)
+		SetInfoText("Show a message box containing recorded mod stats.\nNote that this will not be accurate if run while any critters are active.")
 	endif
 EndEvent
 

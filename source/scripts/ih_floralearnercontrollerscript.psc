@@ -38,8 +38,8 @@ State Ready
 			; Allegedly the game can crash or freeze if a quest is restarted immediately after being stopped,
 			; so we force a short delay here to ensure stability
 			RegisterForSingleUpdate(0.1)
-		else
-			IH_Util.Trace("Skipping/ending learner routine; cell: " + currentCell + " / last count: " + examinedTypesSize)
+		;else
+		;	IH_Util.Trace("Skipping/ending learner routine; cell: " + currentCell + " / last count: " + examinedTypesSize)
 		endif
 		
 		lastExaminedTypesSize = examinedTypesSize

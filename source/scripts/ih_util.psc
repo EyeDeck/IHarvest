@@ -10,7 +10,7 @@ EndFunction
 ;/ Realized I had to add an infinite recursion check, otherwise Bad Things could happen;
 ; best way to do that was to make the original function into a proxy /;
 bool Function ProducesIngredientInternal(Form f, bool food, Form[] seen, int seenEnd) Global
-	IH_Util.Trace("Examining Form " + f)
+;	IH_Util.Trace("Examining Form " + f)
 	if (seen.RFind(f, seenEnd) >= 0)
 		DEBUG.Trace("IHarvest: Skipped a circular FormList/LeveledItem " + f + " in ProducesIngredient() - you may want to investigate this as this may cause crashes elsewhere!", 1)
 		return false
