@@ -160,7 +160,7 @@ float[] Function GetClosestPointAtRadius(float startX, float startY, float start
 	return out
 EndFunction
 
-Function QuarantineObject(ObjectReference thing) global
+Function QuarantineObject(ObjectReference thing) Global
 	thing.MoveTo(Game.GetForm(0x1037F2) as ObjectReference) ; a marker in WIDeadBodyCleanupCell
 	IH_Util.Trace("Moved deleted object " + thing + " into quarantine cell")
 EndFunction
@@ -168,4 +168,81 @@ EndFunction
 Function Trace(string str, int severity = 0) Global
 { 0 = Info, 1 = Warning, 2 = Error }
 	DEBUG.TraceUser("IHarvest", str, severity)
+EndFunction
+
+int Function MaxI(int i, int j) Global
+	if (i > j)
+		return i
+	else
+		return j
+	endif
+EndFunction
+
+int Function MinI(int i, int j) Global
+	if (i < j)
+		return i
+	else
+		return j
+	endif
+EndFunction
+
+Function AddFormsToFormList(Form[] forms, FormList list) Global
+	int i = forms.Length - 1
+	while (i >= 0)
+		list.AddForm(forms[i])
+		i -= 1
+	endwhile
+EndFunction
+
+; forgot how crap Papyrus arrays are in Skyrim, so this doesn't work without hardcoded array sizes
+;ObjectReference[] Function CopyRefArray(ObjectReference[] refs) Global
+;	ObjectReference[] refsNew = new ObjectReference[1]
+;	refsNew[1] = refs[1]
+;	int len = refs.Length
+;	int i = 1
+;	while (i < len)
+;		refsNew.Add(refs[i])
+;		i += 1
+;	endwhile
+;	return refsNew
+;EndFunction
+
+bool Function IsRefArrayFilled(ObjectReference[] refs, ObjectReference dummy) Global
+	int i = refs.Length - 1
+	while (i >= 0)
+		ObjectReference ref = refs[i]
+		if (ref == None || ref == dummy)
+			return false
+		endif
+		i -= 1
+	endwhile
+	return true
+EndFunction
+
+bool Function AreAllIntsAtOrAboveThreshold(int[] ints, int threshold) Global
+	int i = ints.Length - 1
+	while (i >= 0)
+		if (ints[i] < threshold)
+			return false
+		endif
+		i -= 1
+	endwhile
+	return true
+EndFunction
+
+; useful for clearing an array without changing its size
+Function SetRefArray(ObjectReference[] refs, ObjectReference value) Global
+	int i = refs.Length - 1
+	while (i >= 0)
+		refs[i] = value
+		i -= 1
+	endwhile
+EndFunction
+
+Function SetIntArray(int[] ints, int value) Global
+	int i = ints.Length - 1
+	while (i >= 0)
+		ints[i] = value
+		i -= 1
+	endwhile
 EndFunction

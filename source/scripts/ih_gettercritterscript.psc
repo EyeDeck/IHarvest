@@ -488,7 +488,7 @@ Function TranslateWithinRadius(ObjectReference tgt, float zOffset, float radius,
 		return
 	endif
 	
-	if (recursionDepth < 20)
+	if (recursionDepth < 3)
 		if (recursionDepth >= 0)
 			TranslateWithinRadius(tgt, zOffset, radius, skipRadius, speed * recurseSpeedMult, faceTargetFirst, recursionDepth + 1, recurseSpeedMult)
 		endif

@@ -10,7 +10,7 @@ GlobalVariable Property IH_SpawnDistanceMult Auto
 GlobalVariable Property IH_OffsetReturnPoint Auto
 GlobalVariable Property IH_StaffDrainPerSpawn Auto
 GlobalVariable Property IH_MagickaDrainPerSpawn Auto
-GlobalVariable Property IH_UseStartFunc Auto
+GlobalVariable Property IH_SearchMode Auto
 
 IH_PersistentDataScript Property IH_PersistentData Auto
 
@@ -48,10 +48,12 @@ Event OnPageReset(string a_page)
 		OIDrecall = AddTextOption("$Recall Active Critters", "[ ]")
 		OIDclear = AddTextOption("$Clear Flora Cache", "[ ]")
 		OIDdelete = AddTextOption("$Delete Getter Critters", "[ ]")
-		if (IH_UseStartFunc.GetValue() <= 0.0)
+		if (IH_SearchMode.GetValue() <= 0.0)
 			OIDquestmode = AddMenuOption("$Quest Start Mode", "$Story Manager")
-		else
+		elseif (IH_SearchMode.GetValue() == 1)
 			OIDquestmode = AddMenuOption("$Quest Start Mode", "$Start")
+		else
+			OIDquestmode = AddMenuOption("$Quest Start Mode", "$skypal")
 		endif
 		
 		SetCursorPosition(1) ; top right
@@ -148,22 +150,25 @@ EndEvent
 Event OnOptionMenuOpen(int a_option)
 	string[] options
 	if (a_option == OIDquestmode)
-		options = new string[2]
+		options = new string[3]
 		options[0] = "$Story Manager"
 		options[1] = "$Start"
-		SetMenuDialogDefaultIndex(0)
-		SetMenuDialogStartIndex(IH_UseStartFunc.GetValue() as int)
+		options[2] = "$skypal"
+		SetMenuDialogDefaultIndex(IH_Util.MinI(2, IH_Util.MaxI(0, IH_SearchMode.GetValue() as int)))
+		SetMenuDialogStartIndex(IH_SearchMode.GetValue() as int)
 		SetMenuDialogOptions(options)
 	endif
 EndEvent
 
 Event OnOptionMenuAccept(int a_option, int a_index)
 	if (a_option == OIDquestmode)
-		IH_UseStartFunc.SetValue(a_index as float)
-		if (a_index <= 0)
+		IH_SearchMode.SetValue(a_index as float)
+		if (a_index == 0)
 			SetMenuOptionValue(OIDquestmode, "$Story Manager")
-		else
+		elseif (a_index == 1)
 			SetMenuOptionValue(OIDquestmode, "$Start")
+		else
+			SetMenuOptionValue(OIDquestmode, "$skypal")
 		endif
 	endif
 EndEvent

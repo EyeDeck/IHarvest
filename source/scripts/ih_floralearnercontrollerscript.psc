@@ -2,11 +2,15 @@ Scriptname IH_FloraLearnerControllerScript extends Quest
 
 Actor Property PlayerRef Auto
 
-Quest Property IH_FloraLearner Auto
+Quest Property IH_FloraLearnerStart Auto
 Quest Property IH_FloraLearnerSM Auto
 
 ; GlobalVariable Property IH_LearnerRunning Auto ; v1.0.9: deprecated, hasn't been useful since v1.0.4
-GlobalVariable Property IH_UseStartFunc Auto
+GlobalVariable Property IH_SearchMode Auto
+
+GlobalVariable Property IH_LearnFood Auto
+GlobalVariable Property IH_LearnHearthfire Auto
+
 Message Property IH_StoryManagerHighLoad Auto
 Keyword Property IH_SMKeyword Auto
 
@@ -41,24 +45,31 @@ State Ready
 ;		IH_LearnerRunning.SetValue(1.0)
 		GoToState("Busy")
 		
+		int startMode = IH_SearchMode.GetValue() as int
 		int examinedTypesSize = IH_ExaminedTypes.GetSize()
-		Cell currentCell = PlayerRef.GetParentCell()
-		
-		; did the last run not find anything, or was it cast with the same cells loaded?
-		; if yes to both, don't bother running, because starting that quest is very expensive (and potentially crashy)
-		if (lastExaminedTypesSize != examinedTypesSize || currentCell != lastLearnedCell)
-			IH_Util.Trace("Starting learner threads; cell: " + currentCell + " / last count: " + examinedTypesSize)
-			RunLearnerThreads()
+		if (startMode < 2)
+			Cell currentCell = PlayerRef.GetParentCell()
 			
-			; Allegedly the game can crash or freeze if a quest is restarted immediately after being stopped,
-			; so we force a short delay here to ensure stability
-			RegisterForSingleUpdate(0.1)
-		;else
-		;	IH_Util.Trace("Skipping/ending learner routine; cell: " + currentCell + " / last count: " + examinedTypesSize)
+			; did the last run not find anything, or was it cast with the same cells loaded?
+			; if yes to both, don't bother running, because starting that quest is very expensive (and potentially crashy)
+			if (lastExaminedTypesSize != examinedTypesSize || currentCell != lastLearnedCell)
+				IH_Util.Trace("Starting learner threads; cell: " + currentCell + " / last count: " + examinedTypesSize)
+				
+				if (startMode == 0)
+					RunLearnerSMEvent()
+					RegisterForSingleUpdate(0.1) ; restart after a short delay, for stability
+				elseif (startMode == 1)
+					RunLearnerStart()
+					RegisterForSingleUpdate(0.1)
+				endif
+			endif
+			
+			lastLearnedCell = currentCell
+		else
+			IH_Util.Trace("Starting skypal learner routine / last count: " + examinedTypesSize)
+			RunLearnerSkypal()
 		endif
-		
 		lastExaminedTypesSize = examinedTypesSize
-		lastLearnedCell = currentCell
 		
 		GoToState("Ready")
 ;		IH_LearnerRunning.SetValue(0.0)
@@ -91,55 +102,114 @@ Function VerifyState()
 	else
 		IH_Util.Trace("FloraLearnerController state " + GetState() + " seems fine.")
 	endif
-	if (IH_UseStartFunc.GetValue() as bool)
-		IH_FloraLearner.Stop()
+	if (IH_SearchMode.GetValue() == 1)
+		IH_FloraLearnerStart.Stop()
 	else
 		IH_FloraLearnerSM.Stop()
 	endif
 EndFunction
 
-Function RunLearnerThreads()
-	int i
-	unfinishedThreads = 4
-	bool startMode = IH_UseStartFunc.GetValue() as bool
-	
-	if (startMode)
-		if (!IH_FloraLearner.Start()) 
-			; try stopping and restarting I guess
-			IH_FloraLearner.Stop()
-			Utility.Wait(0.1)
-			return
-		endif
-	else
-		IH_SMKeyword.SendStoryEvent(aiValue2 = 2)
-		
-		i = 0
-		while (i < 50 && !IH_FloraLearnerSM.IsRunning()) ; 5 second timeout
-			Utility.WaitMenuMode(0.1)
-			i += 1
-		endwhile
-		
-		if (i == 50)
-			IH_StoryManagerHighLoad.Show()
-			IH_FloraLearnerSM.Stop()
-			Utility.Wait(0.1)
-			return
-		endif
-	endif
-	
-	i = 0
-	while (unfinishedThreads > 0 && i < 25)
+bool Function WaitForThreads(int timeout)
+	int i = 0
+	while (unfinishedThreads > 0 && i < timeout)
 		Utility.wait(0.1)
 		i += 1
 	endwhile
-	if (i >= 25)
-		IH_Util.Trace("Detected that FloraLearnerController may be stuck, testing...")
+	if (i >= timeout)
+		return false
+	else
+		return true
+	endif
+EndFunction
+
+Function RunLearnerSkypal()
+	bool learnFood = IH_LearnFood.GetValue() > 0.0
+	bool learnHF = IH_LearnHearthfire.GetValue() > 0.0
+	
+	int[] formTypes = new int[3] ; see SKSE's GameForms.h for indices
+	formTypes[0] = 0x26 ; Tree
+	formTypes[1] = 0x27 ; Flora
+	formTypes[2] = 0x1E ; Ingredient
+	ObjectReference[] grid = skypal_references.Grid()
+	
+	ObjectReference[] refs = skypal_references.Filter_Base_Form_Types(grid, formTypes, "")
+	refs = skypal_references.Filter_Bases_Form_List(refs, IH_ExaminedTypes, "!")
+	Form[] bases = skypal_bases.From_References(refs, ".")
+	IH_Util.AddFormsToFormList(bases, IH_ExaminedTypes)
+	
+	; IH_Util.Trace("refs to process:" + refs)
+	
+	int i = 0
+	int len = bases.Length
+	while (i < len)
+		Form base = bases[i]
+		; IH_Util.Trace("	processing:" + base)
+		if (IH_FloraLearnerScript.ShouldLearnBase(base, learnFood, learnHF))
+			IH_LearnedTypes.AddForm(base)
+		endif
+		i += 1
+	endwhile
+	
+	formTypes = new int[1]
+	formTypes[0] = 0x18 ; Activator
+	refs = skypal_references.Filter_Base_Form_Types(grid, formTypes, "")
+	
+	; IH_Util.Trace("activators to process:" + refs)
+	
+	while (refs.Length > 0)
+		refs = skypal_references.Filter_Bases_Form_List(refs, IH_ExaminedTypes, "!")
+		bases = skypal_bases.From_References(refs, "...")
+		i = 0
+		while (i < IH_Util.MinI(4, refs.Length))
+			Form base = bases[i]
+			IH_ExaminedTypes.AddForm(base)
+			; IH_Util.Trace("	processing:" + refs[i] + ", " + base)
+			if (IH_FloraLearnerScript.ShouldLearnActivator(refs[i], base, learnFood, learnHF))
+				IH_LearnedTypes.AddForm(base)
+			endif
+			i += 1
+		endwhile
+	endwhile
+EndFunction
+
+Function RunLearnerSMEvent()
+	unfinishedThreads = 4
+	
+	IH_SMKeyword.SendStoryEvent(aiValue2 = 2)
+	
+	int i = 0
+	while (i < 50 && !IH_FloraLearnerSM.IsRunning()) ; 5 second timeout
+		Utility.Wait(0.1)
+		i += 1
+	endwhile
+	
+	if (i == 50)
+		IH_StoryManagerHighLoad.Show()
+		IH_FloraLearnerSM.Stop()
+		Utility.Wait(0.1)
+		return
+	endif
+	
+	if (WaitForThreads(25) == false) ; 2.5s
 		VerifyState()
 	endif
 	
-	if (startMode)
-		IH_FloraLearner.Stop()
-	else
-		IH_FloraLearnerSM.Stop()
+	IH_FloraLearnerSM.Stop()
+EndFunction
+
+Function RunLearnerStart()
+	unfinishedThreads = 4
+	
+	if (!IH_FloraLearnerStart.Start()) 
+		; try stopping and restarting I guess
+		IH_FloraLearnerStart.Stop()
+		Utility.Wait(0.1)
+		return
 	endif
+	
+	if (WaitForThreads(25) == false) ; 2.5s
+		VerifyState()
+	endif
+	
+	IH_FloraLearnerStart.Stop()
 EndFunction

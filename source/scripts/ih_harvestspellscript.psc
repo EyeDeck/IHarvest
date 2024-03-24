@@ -18,6 +18,7 @@ Actor caster
 
 ObjectReference[] cachedFlora
 int cachedFloraCount
+int nextIndex
 
 int Property MaxDelay = 1000000 Auto
 {These settings control the "refire" rate of the spell, which we do in-script
@@ -132,7 +133,7 @@ Event OnEffectStart(Actor akTarget, Actor akCaster)
 	minDelay = MinDelayBase - (MinDelayBonusPerAlteration * alt) - (MinDelayBonusPerAlchemy * alch)
 	accel = 0.85 - ((AccelerationBonusPerAlteration * alt) + (AccelerationBonusPerAlchemy * alch)) / usDivisor
 	
-	radius = MinRadius
+	;radius = MinRadius
 	maxRadius = MaxRadiusBase + (MaxRadiusBonusPerAlteration * alt) + (MaxRadiusBonusPerAlchemy * alch)
 	
 	if (dualCasting)
@@ -140,6 +141,8 @@ Event OnEffectStart(Actor akTarget, Actor akCaster)
 		accel = accel * DualCastAccelMultiplier / 100
 		minDelay = minDelay * DualCastMinDelayMultiplier / 100
 	endif
+	
+	radius = maxRadius
 	
 ;	if (allowReg)
 	RegisterForSingleUpdate(delay / usDivisor)
@@ -248,7 +251,7 @@ Function DoCast()
 ;	IH_Util.Trace("Set critter's targets: " + caster + ", " + thing)
 	
 	if (cachedFloraCount == 0) ; precache for next run
-		cachedFloraCount = CacheHarvestables()
+		TryCacheHarvestables()
 	endif
 	
 	if (caster == PlayerRef)
@@ -268,40 +271,60 @@ Function DoCast()
 EndFunction
 
 ObjectReference Function GetHarvestable()
-	if (cachedFloraCount == 0)
-		cachedFloraCount = CacheHarvestables()
-		if (cachedFloraCount < 8 && radius < maxRadius)
-			; IH_Util.Trace("radius=" + radius + ", maxRadius=" + maxRadius)
-			; if the cache is not full, increase the radius for the next check to try to avoid expensive total misses
-			radius = (radius * 1.5) as int
-			if (radius > maxRadius)
-				radius = maxRadius
-			endif
-			;~_Util.Trace("Bumped search radius to " + radius)
-			if (cachedFloraCount == 0)
-				; just recurse until we do find something, or exhaust our radius, whichever comes first
-				return GetHarvestable()
-			endif
+	; IH_Util.Trace("ct: " + cachedFloraCount + " :" + cachedFlora)
+	if (cachedFloraCount <= 0)
+		if (TryCacheHarvestables() == false)
+			return None
+		endif
+		; if (cachedFloraCount < 8 && radius < maxRadius)
+		; 	; IH_Util.Trace("radius=" + radius + ", maxRadius=" + maxRadius)
+		; 	; if the cache is not full, increase the radius for the next check to try to avoid expensive total misses
+		; 	radius = (radius * 1.5) as int
+		; 	if (radius > maxRadius)
+		; 		radius = maxRadius
+		; 	endif
+		; 	;~_Util.Trace("Bumped search radius to " + radius)
+		; 	if (cachedFloraCount == 0)
+		; 		; just recurse until we do find something, or exhaust our radius, whichever comes first
+		; 		return GetHarvestable()
+		; 	endif
+		; endif
+		if (cachedFloraCount <= 0)
+			IH_Util.Trace("GetHarvestable() could not find any flora; running learning routine and returning None")
+			IH_FloraLearnerController.Run()
+			return None
 		endif
 	endif
 	
-	; IH_Util.Trace("cachedFloraCount:" + cachedFloraCount + " cachedFlora:" + cachedFlora)
+	; IH_Util.Trace("cachedFloraCount=" + cachedFloraCount + ", nextIndex=" + nextIndex + ", cachedFlora=" + cachedFlora)
 	
-	if (cachedFloraCount == 0)
-		IH_Util.Trace("GetHarvestable() could not find any flora; running learning routine and returning None")
-		IH_FloraLearnerController.Run()
-		return None
-	endif
 	cachedFloraCount -= 1
-	return cachedFlora[cachedFloraCount]
+	ObjectReference toReturn = cachedFlora[nextIndex]
+	cachedFlora[nextIndex] = None
+	nextIndex += 1
+	return toReturn
 EndFunction
+
+bool Function TryCacheHarvestables()
+	int i = CacheHarvestables()
+	if (i < 0)
+		return false
+	endif
+	cachedFloraCount = i
+	nextIndex = 0
+	return true
+EndFunction
+
 
 int Function CacheHarvestables()
 	IH_CurrentSearchRadius.SetValue(radius as float)
 	
-	cachedFlora = IH_PersistentData.GetNearbyHarvestables(caster as ObjectReference)
-	
-	;~_Util.Trace("cachedFlora: " + cachedFlora)
+	ObjectReference[] temp = IH_PersistentData.GetNearbyHarvestables(caster as ObjectReference)
+	if (temp.Length == 1)
+		; GetNearbyHarvestables failed, so tell caller to do nothing
+		return -1
+	endif
+	cachedFlora = temp
 	
 	; please ignore how ugly this block of optimized code looks kthx
 	; it's just an unrolled + optimized binary search to find the end of the array

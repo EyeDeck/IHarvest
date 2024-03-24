@@ -1,6 +1,7 @@
 Scriptname IH_PersistentDataScript extends Quest
 
 Actor Property PlayerRef Auto
+ActorBase Property Player Auto
 
 IH_FloraLearnerControllerScript Property IH_FloraLearnerController Auto
 
@@ -12,6 +13,7 @@ Message Property IH_SKSEMismatch			Auto
 Message Property IH_Update					Auto
 Message Property IH_UpdateUnsupported		Auto
 Message Property IH_StoryManagerHighLoad	Auto
+Message Property IH_doticuLibNotWorking		Auto
 
 Message Property IH_StatsDisplay			Auto
 Message Property IH_OperationFinishedCache	Auto
@@ -21,9 +23,10 @@ Message Property IH_OperationFinishedDelete	Auto
 FormList Property IH_SpawnableBase_01		Auto
 ; Forgot to fill this when I first added it, so need a new property now
 
+GlobalVariable Property IH_CurrentSearchRadius Auto
 GlobalVariable Property IH_CritterCap Auto
-GlobalVariable Property IH_SetPlayerNotPushable Auto
-GlobalVariable Property IH_UseStartFunc Auto
+GlobalVariable Property IH_SetPlayerNotPushable Auto ; never managed to get this to work
+GlobalVariable Property IH_SearchMode Auto
 
 GlobalVariable Property IH_LearnHearthfire Auto
 
@@ -38,9 +41,13 @@ int Property cacheSize = -1 Auto
 int Property pathAliasCount = 64 Auto
 
 Keyword Property IH_SMKeyword Auto
-IH_FloraFinderScript Property IH_FloraFinder Auto
-IH_FloraFinderScript Property IH_FloraFinderPlayer Auto
-Quest Property IH_FloraLearner Auto
+IH_FloraFinderScript Property IH_FloraFinderSM Auto
+IH_FloraFinderScript Property IH_FloraFinderStart Auto
+IH_FloraFinderScript Property IH_FloraFinderSkypal Auto
+IH_FloraFinderWorkerScript[] Property IH_FloraFinderWorkersSkypal Auto
+; Quest Property IH_FloraLearner Auto
+
+Keyword Property IH_IgnoreObject Auto
 
 Formlist Property IH_ExaminedTypes Auto
 Formlist Property IH_LearnedTypes Auto
@@ -55,6 +62,7 @@ IH_GetterCritterScript[] Property StandbyGetterCrittersGT Auto
 
 IH_GetterCritterScript[] Property ActiveGetterCritters Auto
 {Array of critters that are enabled and doing something; probably sparse}
+
 
 int standbyCritterCount = 0
 int standbyCritterCountGT = 0
@@ -72,12 +80,17 @@ int cacheSize
 int leadingIndex = 0
 int trailingIndex = 0
 
-int workerCount = 8 ; must be hard-coded—if changed, also update the array init size in OnQuestInit()
-ObjectReference[] FoundFlora
+; this is hard-coded in a few places for technical reasons, so ctrl+f workerCount and fix those too if changed
+; must also be updated in-editor for FinderThreadResultsRefs and FinderThreadResultsInts
+int workerCount = 8
+
+; ObjectReference[] FoundFlora
 int lastCallbackTime = 0
-int finishedWorkers = 0
-int fruitfulWorkers = 0
-int cachedFlora = 0
+; int finishedWorkers = 0
+; int fruitfulWorkers = 0
+; int cachedFlora = 0
+ObjectReference[] Property FinderThreadResultsRefs Auto
+int[] Property FinderThreadResultsInts Auto
 
 int SMFailureCount = 0
 
@@ -86,7 +99,7 @@ bool busy = false
 int Property version Auto
 
 int Function GetVersion()
-	return 010107 ; 01.01.07
+	return 010200 ; 01.02.00
 EndFunction
 
 Event OnInit()
@@ -130,7 +143,8 @@ EndEvent
 Function OnGameLoad()
 {Called by other code when the player loads a game}
 	CheckUpdates()
-; SyncNonPersistent()
+	; DumpFormList(IH_LearnedTypes)
+	; SyncNonPersistent()
 EndFunction
 
 Function AddIgnoredObject(ObjectReference thing)
@@ -159,21 +173,25 @@ EndFunction
 ; variables would get nuked every time the quest restarted (I didn't realize the engine did that), but ultimately
 ; it doesn't really matter where these are stored so I decided to just move them to another existing quest
 -----------/;
-Function FloraFinderUpdate(ObjectReference thing, int err)
-	; IH_Util.Trace("\tGot our callback with " + thing + ", err: " + err)
-	if (err == 1)
-		; most common parameter, do nothing
-	elseif (err == 0)
-	;	IH_Util.Trace("\tGot our callback with " + thing + ", added to cache " + fruitfulWorkers)
-		FoundFlora[fruitfulWorkers] = thing
-		fruitfulWorkers += 1
-	else
-		; v1.0.8: put script-filtered objects in the ignore list, so we don't waste time
-		; retrying them over and over (oops...)
-		AddIgnoredObject(thing)
-	endif
-	finishedWorkers += 1
-EndFunction
+;Function FloraFinderUpdate(ObjectReference thing, int err)
+;	; IH_Util.Trace("\tGot our callback with " + thing + ", err: " + err)
+;	if (err == 1)
+;		; most common parameter, do nothing
+;	elseif (err == 0)
+;	;	IH_Util.Trace("\tGot our callback with " + thing + ", added to cache " + fruitfulWorkers)
+;		if (fruitfulWorkers >= workerCount)
+;			IH_Util.Trace("More worker returns than workers? -- skipping return of " + thing)
+;			return
+;		endif
+;		FoundFlora[fruitfulWorkers] = thing
+;		fruitfulWorkers += 1
+;	else
+;		; v1.0.8: put script-filtered objects in the ignore list, so we don't waste time
+;		; retrying them over and over (oops...)
+;		AddIgnoredObject(thing)
+;	endif
+;	finishedWorkers += 1
+;EndFunction
 
 Function FloraFinderCallback(int time)
 	lastCallbackTime = time
@@ -187,19 +205,68 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 		return new ObjectReference[1]
 	endif
 	busy = true
-	FoundFlora = new ObjectReference[8]
-	finishedWorkers = 0
-	fruitfulWorkers = 0
-	cachedFlora = 0
+	
+	; finishedWorkers = 0
+	; fruitfulWorkers = 0
+	; cachedFlora = 0
 	int i
+	int searchMode = IH_SearchMode.GetValue() as int
 	
 	lastCallbackTime = -1
 	int sendTime = (Utility.GetCurrentRealTime() as int)
 	
 	IH_FloraFinderScript finderQuest
-	if (caster == PlayerRef && IH_UseStartFunc.GetValue())
+	
+	if (searchMode == 2)
+		; Get refs in the loaded cell area
+		IH_Util.Trace("skypalFetchGrid start")
+		ObjectReference[] refs =  skypal_references.Grid()
+		IH_Util.Trace("skypalFetchGrid end")
+		if (refs as bool == false)
+			IH_doticuLibNotWorking.Show()
+			busy = false
+			return new ObjectReference[1]
+		endif
+		
+		Actor casterA = caster as Actor
+		
+		; Filter for refs whose base types are in IH_LearnedTypes
+		refs = skypal_references.Filter_Bases_Form_List(refs, IH_LearnedTypes, "")
+		
+		; Filter disabled refs
+		refs = skypal_references.Filter_Enabled(refs, "")
+		
+		; Filter for refs within IH_CurrentSearchRadius units of caster
+		refs = skypal_references.Filter_Distance(refs, IH_CurrentSearchRadius.GetValue(), caster, "<")
+		
+		Keyword[] kywds = new Keyword[1]
+		kywds[0] = IH_IgnoreObject
+		; Filter for refs without IH_IgnoreObject
+		refs = skypal_references.Filter_Keywords(refs, kywds, "!|")
+		
+		Actor[] a = new Actor[1]
+		a[0] = casterA
+		refs = skypal_references.Filter_Potential_Thieves(refs, a, "!|")
+		
+		; Sort by closer to caster
+		refs = skypal_references.Sort_Distance(refs, caster, "<")
+		
+		; IH_Util.Trace("After all filters with len:" + refs.Length + "\n" + refs)
+		
+		i = 0
+		int len = refs.Length
+		while (i < workerCount && i < len)
+			ObjectReference r = None
+			IH_FloraFinderWorkersSkypal[i].FillAndRun(refs[i], casterA, i, FinderThreadResultsRefs, FinderThreadResultsInts)
+			i += 1
+		endwhile
+		while (i < workerCount)
+			FinderThreadResultsInts[i] = 1
+			i += 1
+		endwhile
+	elseif (caster == PlayerRef && searchMode == 1)
 		; IH_Util.Trace("Starting player-specific quest the old-fashioned way...waiting for worker threads to finish.")
-		finderQuest = IH_FloraFinderPlayer
+		finderQuest = IH_FloraFinderStart
 		if (finderQuest.Start() == false && finderQuest.IsRunning())
 			finderQuest.Stop()
 			if (finderQuest.Start())
@@ -210,12 +277,12 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 		endif
 	else
 		IH_Util.Trace("Sent story event...waiting for worker threads to finish.")
-		finderQuest = IH_FloraFinder
+		finderQuest = IH_FloraFinderSM
 		IH_SMKeyword.SendStoryEvent(akRef1 = caster, aiValue1 = sendTime, aiValue2 = 1)
 		
 		i = 0
 		while (lastCallbackTime < 0 && i < 60) ; 3 second timeout
-			Utility.WaitMenuMode(0.05)
+			Utility.Wait(0.05)
 			i += 1
 		endwhile
 		
@@ -236,7 +303,7 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 					
 					i = 0
 					while (lastCallbackTime < 0 && i < 120)
-						Utility.WaitMenuMode(1.0)
+						Utility.Wait(1.0)
 						i += 1
 					endwhile
 					if (i < 300)
@@ -277,16 +344,45 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 ;	SMFailureCount = 0
 
 	; now wait for our worker threads to fill in the data we want
+	;i = 0
+	;while (finishedWorkers < 8 && i < 100)
+	;;	IH_Util.Trace("finishedWorkers:" + finishedWorkers)
+	;	Utility.WaitMenuMode(0.033) ; ~2 frames at 60fps
+	;	i += 1 ; failsafe
+	;endwhile
+	
 	i = 0
-	while (finishedWorkers < 8 && i < 20)
+	while (IH_Util.AreAllIntsAtOrAboveThreshold(FinderThreadResultsInts, 0) == false && i < 100)
 	;	IH_Util.Trace("finishedWorkers:" + finishedWorkers)
 		Utility.WaitMenuMode(0.033) ; ~2 frames at 60fps
 		i += 1 ; failsafe
 	endwhile
+	
 	;~_Util.Trace("Workers finished. FoundFlora:" + FoundFlora)
-	finderQuest.Stop()
+	if (finderQuest)
+		finderQuest.Stop()
+	endif
+	
+	ObjectReference[] toReturn = new ObjectReference[8] ; workerCount
+	i = 0
+	int j = 0
+	while (i < workerCount)
+		ObjectReference ref = FinderThreadResultsRefs[i]
+		if (FinderThreadResultsInts[i] > 1); -1 = no result yet; 0 = found something; 1 = found nothing; 2+ = filtered
+			AddIgnoredObject(ref)
+		else
+			toReturn[j] = FinderThreadResultsRefs[i]
+			j += 1
+		endif
+		
+		FinderThreadResultsRefs[i] = None
+		FinderThreadResultsInts[i] = -1
+		i += 1
+	endwhile
+	
 	busy = false
-	return FoundFlora
+	
+	return toReturn
 EndFunction
 
 ;/ To avoid making and destroying actors all of the time, we keep a persistent cache of them instead,
@@ -352,14 +448,7 @@ IH_GetterCritterScript Function GetGetterCritter2(Actor caster, bool gt)
 	return toReturn
 EndFunction
 
-;/ Keep having troubles with this function, or maybe something else; either critters are occasionally getting selected from the standby
-; cache without getting removed from it (which the log evidence doesn't support), or this function gets called twice in a row sometimes.
-; This ultimately ends up causing a duplicate to end up in the standby cache, and when that happens the critter can get called on
-; more than once simultaneously, which means the critter will probably get very confused, and possibly make a mess of other data etc...
-; I thought it might be a thread lock issue, but I put spin locks in all of the spots that could cause this and they never triggered,
-; so I really don't know what is going wrong here.
-; Until I can find the underlying issue, we'll just detect when things go wrong and forcibly fix the caches right then.
-/;
+;/ v1.2.0: removed the old note here because I fixed the bug it was complaining about /;
 Function ReturnGetterCritter2(IH_GetterCritterScript c, bool gt)
 	if (!RemoveActiveCritter(c))
 		;IH_Util.Trace("Failed to remove this critter from active cache " + c)
@@ -599,6 +688,7 @@ EndFunction
 Function RecallAllCritters()
 	float time = Utility.GetCurrentRealTime()
 	string st
+	busy = true
 	
 	IH_Util.Trace("Recalling all critters...\n\tActiveGetterCritters:")
 	PrintCritterArray(ActiveGetterCritters)
@@ -671,6 +761,7 @@ Function RecallAllCritters()
 	IH_Util.Trace("Ignore any warnings about \"Skipped return to cache...\" following this line, those are harmless.")
 	
 	IH_OperationFinishedRecall.Show(time)
+	busy = false
 EndFunction
 
 bool Function DedupeAndCleanIndex(IH_GetterCritterScript[] arr, string arrName, int i, string expected)
@@ -890,6 +981,7 @@ Function CheckUpdates()
 			IH_Util.Trace("\tv1.0.1: Initializing StandbyGetterCrittersGT array")
 			StandbyGetterCrittersGT = new IH_GetterCritterScript[128]
 			v10102_UpdateHFSetting(false)
+			v10200_SetDefaultSearchMode()
 		else
 			; update code NOT to apply on first run
 			if (version < 10105)
@@ -911,6 +1003,10 @@ Function CheckUpdates()
 			if (version < 10102)
 				v10102_UpdateHFSetting(true)
 				v10102_SetCrittersTeammate()
+			endif
+			
+			if (version < 10200)
+				v10200_SetDefaultSearchMode()
 			endif
 		endif
 		
@@ -983,18 +1079,26 @@ Function v10102_SetCrittersTeammate()
 	IH_Util.Trace("\t...Done.")
 EndFunction
 
-Function SyncNonPersistent()
-;/
-	float config = IH_StaffDrainPerSpawn.GetValue()
-	if (config == 15.0)
-		IH_Util.Trace("No need to sync configurable staff drain magnitude.")
-		return
+Function DumpFormList(FormList f)
+	int size = f.GetSize()
+	IH_Util.Trace("Dumping FormList " + f + " of size " + size)
+	int i = 0
+	while (i < size)
+		IH_Util.Trace("\t" + i + ": " + f.GetAt(i))
+		i += 1
+	endwhile
+	IH_Util.Trace("Finished dumping " + f)
+EndFunction
+
+Function v10200_SetDefaultSearchMode()
+	Debug.Trace(self + " Checking if doticu's skypal library is installed (this may error)")
+	if (skypal.Has_DLL())
+		IH_Util.Trace("Set search mode to 2.0 (skypal)")
+		IH_SearchMode.SetValue(2.0)
+	elseif (IH_SearchMode.GetValue() < 0.0)
+		IH_Util.Trace("Set search mode to 0.0 (Story Manager events)")
+		IH_SearchMode.SetValue(0.0)
 	endif
-	
-	IH_StaffDrainLeftSpell.SetNthEffectMagnitude(0, config)
-	IH_StaffDrainRightSpell.SetNthEffectMagnitude(0, config)
-	IH_Util.Trace("Synced configurable staff drain magnitude.")
-/;
 EndFunction
 
 ;/ =========================== \;
@@ -1039,3 +1143,18 @@ bool Function ReplaceFirstInstance(IH_GetterCritterScript[] arr, IH_GetterCritte
 	
 	return false
 EndFunction
+
+Function SyncNonPersistent()
+;/
+	float config = IH_StaffDrainPerSpawn.GetValue()
+	if (config == 15.0)
+		IH_Util.Trace("No need to sync configurable staff drain magnitude.")
+		return
+	endif
+	
+	IH_StaffDrainLeftSpell.SetNthEffectMagnitude(0, config)
+	IH_StaffDrainRightSpell.SetNthEffectMagnitude(0, config)
+	IH_Util.Trace("Synced configurable staff drain magnitude.")
+/;
+EndFunction
+
