@@ -102,7 +102,7 @@ bool busy = false
 int Property version Auto
 
 int Function GetVersion()
-	return 010205 ; 01.02.05
+	return 010206 ; 01.02.06
 EndFunction
 
 Event OnInit()
@@ -153,7 +153,7 @@ Function OnGameLoad()
 		SkyPal_References.Change_Collision_Layer_Type(IH_Util.DowncastCritterArr(ActiveGetterCritters), 42)
 	endif
 	
-	ResyncPointerHolders()
+	; ResyncPointerHolders()
 	; DumpFormList(IH_LearnedTypes)
 	; SyncNonPersistent()
 EndFunction
@@ -318,7 +318,7 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 			endif
 		endif
 	else ; Story Manager mode
-		IH_Util.Trace("Sent story event...waiting for worker threads to finish.")
+		IH_Util.Trace("Sent story event. Waiting for worker threads to finish...")
 		finderQuest = IH_FloraFinderSM
 		IH_SMKeyword.SendStoryEvent(akRef1 = caster, aiValue1 = sendTime, aiValue2 = 1)
 		
@@ -330,7 +330,7 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 		
 		int minTime = (Utility.GetCurrentRealTime() as int) - 5
 		int maxTime = minTime + 10
-		; IH_Util.Trace("Loop ended: " + i + " " + lastCallbackTime + " " + newTime)
+		; IH_Util.Trace("...got callback from IH_FloraFinderScript: " + i + " " + lastCallbackTime + "...")
 		if (i == 60 || lastCallbackTime > maxTime || lastCallbackTime < minTime)
 			; if i == 60 (timeout)  OR  lastCallbackTime > maxTime (also timeout)  OR  lastCallbackTime < minTime (time desync, save was just loaded)
 			IH_Util.Trace("IH_FloraFinder failed to start after a few seconds--Story Manager backed up?", 1)
@@ -407,7 +407,14 @@ ObjectReference[] Function GetNearbyHarvestables(ObjectReference caster)
 		finderQuest.Stop()
 	endif
 	
-	; IH_Util.Trace("Results array:\n\t\t" + FinderThreadResultsInts + "\n\t\t" + FinderThreadResultsRefs)
+	if (i >= 200)
+		IH_Util.Trace("Results timed out...bad pointers? Resyncing.")
+		ResyncPointerHolders()
+	else
+		IH_Util.Trace("Workers finished.")
+	endif
+	
+	IH_Util.Trace("Results array:\n\t\t" + FinderThreadResultsInts + "\n\t\t" + FinderThreadResultsRefs)
 	
 	ObjectReference[] toReturn = new ObjectReference[8] ; workerCount
 	i = 0
@@ -1116,6 +1123,9 @@ Function CheckUpdates()
 			
 			if (version < 10204)
 				v10202_UnsetCrittersTeammate()
+			endif
+			
+			if (version < 10206)
 				ResyncPointerHolders()
 			endif
 		endif
@@ -1221,14 +1231,8 @@ Function ResyncPointerHolders()
 	int i = PointerHolders.length - 1
 	while (i >= 0)
 		IH_FinderPointerHolderScript ph = PointerHolders[i]
-		if (ph.RefPointer != FinderThreadResultsRefs)
-			IH_Util.Trace("PointerHolder " + ph + " RefPointer desynced! Fixing.")
-			ph.RefPointer = FinderThreadResultsRefs
-		endif
-		if (ph.IntPointer != FinderThreadResultsInts)
-			IH_Util.Trace("PointerHolder " + ph + " IntPointer desynced! Fixing.")
-			ph.IntPointer = FinderThreadResultsInts
-		endif
+		ph.RefPointer = FinderThreadResultsRefs
+		ph.IntPointer = FinderThreadResultsInts
 		i -= 1
 	endwhile
 	IH_Util.Trace("PointerHolders synced.")
@@ -1278,16 +1282,5 @@ bool Function ReplaceFirstInstance(IH_GetterCritterScript[] arr, IH_GetterCritte
 EndFunction
 
 Function SyncNonPersistent()
-;/
-	float config = IH_StaffDrainPerSpawn.GetValue()
-	if (config == 15.0)
-		IH_Util.Trace("No need to sync configurable staff drain magnitude.")
-		return
-	endif
-	
-	IH_StaffDrainLeftSpell.SetNthEffectMagnitude(0, config)
-	IH_StaffDrainRightSpell.SetNthEffectMagnitude(0, config)
-	IH_Util.Trace("Synced configurable staff drain magnitude.")
-/;
 EndFunction
 
